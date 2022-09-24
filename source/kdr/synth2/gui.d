@@ -4,7 +4,7 @@ Synth2 graphical user interface.
 Copyright: klknn, 2021.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module kdr.gui;
+module kdr.synth2.gui;
 
 import core.stdc.stdio : snprintf;
 import std.algorithm : max;
@@ -22,7 +22,7 @@ import kdr.lfo : multiplierNames, mulToFloat, Multiplier;
 import kdr.delay : delayNames;
 import kdr.effect : effectNames;
 import kdr.filter : filterNames;
-import kdr.params : typedParam, Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
+import kdr.synth2.params : typedParam, Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
 
 // TODO: CTFE formatted names from enum values.
 private static immutable mulNames = {

@@ -5,7 +5,7 @@ Copyright: klknn 2021.
 Copyright: Elias Batek 2018.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module kdr.client;
+module kdr.synth2.client;
 
 import std.algorithm.comparison : clamp;
 import std.traits : EnumMembers;
@@ -28,18 +28,10 @@ import kdr.envelope : ADSR;
 import kdr.filter : FilterKind;
 import kdr.modfilter : ModFilter;
 import kdr.lfo : Interval, LFO, Multiplier, toBar, toSeconds;
-version (unittest) {} else import kdr.gui : Synth2GUI;
 import kdr.oscillator : Oscillator;
 import kdr.waveform : Waveform;
-import kdr.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
-
-version (unittest) {} else {
-  import dplug.client.dllmain : DLLEntryPoint, pluginEntryPoints;
-
-  // This define entry points for plugin formats,
-  // depending on which version identifiers are defined.
-  mixin(pluginEntryPoints!Synth2Client);
-}
+import kdr.synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
+version (unittest) {} else import kdr.synth2.gui : Synth2GUI;
 
 /// Polyphonic digital-aliasing synth
 class Synth2Client : Client {
@@ -66,9 +58,7 @@ class Synth2Client : Client {
   }
 
   override PluginInfo buildPluginInfo() {
-    // Plugin info is parsed from plugin.json here at compile time.
-    static immutable info = parsePluginInfo(import("plugin.json"));
-    return info;
+    return PluginInfo.init;
   }
 
   override Parameter[] buildParameters() {
@@ -540,7 +530,7 @@ unittest {
 
   host.processAudio();  // to omit the first record.
   auto time = benchmark!(() => host.processAudio())(100)[0].split!("msecs", "usecs");
-  printf("benchmark (default): %d ms %d us\n", cast(int) time.msecs, cast(int) time.usecs);
+  printf("benchmark synth2/default: %d ms %d us\n", cast(int) time.msecs, cast(int) time.usecs);
   version (OSX) {} else {
     version (LDC) assert(time.msecs <= 20);
   }

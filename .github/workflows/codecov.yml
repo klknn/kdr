@@ -43,7 +43,7 @@ jobs:
     - name: D-Scanner
       run: dub fetch dscanner && dub run dscanner -- --styleCheck source
 
-    - name: Test synth2
+    - name: Test
       run: |
         dub test -b=unittest-cov
 

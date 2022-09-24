@@ -43,19 +43,20 @@ jobs:
     - name: Checkout Dplug repo
       uses: actions/checkout@v2
       with:
+        fetch-depth: 0
         repository: AuburnSounds/Dplug
         path: Dplug
 
     # Cache
     - name: Cache
-      id: synth2-cache
+      id: kdr-cache
       uses: actions/cache@v2
       env:
-        cache-name: synth2-cache
+        cache-name: kdr-cache
       with:
         path: |
           ${{ env.VST2_SDK }}
-        key: synth2-cache
+        key: kdr-cache
 
     # Install
     - name: Install Dependencies - Ubuntu
@@ -78,7 +79,7 @@ jobs:
       working-directory: ./Dplug/tools/dplug-build
 
     - name: Setup VST2_SDK
-      if: contains(env.SETUP_VST2_SDK, 'true') && steps.synth2-cache.outputs.cache-hit != 'true'
+      if: contains(env.SETUP_VST2_SDK, 'true') && steps.kdr-cache.outputs.cache-hit != 'true'
       run: |
         curl -LOJ https://web.archive.org/web/20200502121517if_/https://www.steinberg.net/sdk_downloads/vstsdk366_27_06_2016_build_61.zip
         7z x ./vstsdk366_27_06_2016_build_61.zip
@@ -87,7 +88,7 @@ jobs:
         cp "./VST3 SDK/pluginterfaces/vst2.x/aeffectx.h" ${{ env.VST2_SDK }}/pluginterfaces/vst2.x/aeffectx.h
 
     # Test
-    - name: Test synth2
+    - name: Test kdr repo
       # macOS raises link errors
       if: startsWith(matrix.os,'macOS') != true
       run: |
@@ -105,7 +106,7 @@ jobs:
         }
         $esc = '--%'
         ${{ env.DPlugBuild }} $esc $Plugins --final
-      working-directory: .
+      working-directory: bin/synth2
 
     # Upload
     # This task uploads the builds directory that contains all artifacts produced by dplug-build
@@ -115,11 +116,11 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: synth2-${{ matrix.os }}
-        path: ./builds/
+        path: ./bin/synth2/builds/
 
     - name: Archive zip
       run: |
-        7z a ${{ matrix.os }}.zip builds
+        7z a ${{ matrix.os }}.zip ./bin/synth2/builds
 
     - name: Release
       uses: softprops/action-gh-release@v1

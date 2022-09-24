@@ -1,19 +1,21 @@
-# Synth2
+# kdr: klknn dplug repo
 
-[![ci](https://github.com/klknn/synth2/actions/workflows/ci.yml/badge.svg)](https://github.com/klknn/synth2/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/klknn/synth2/branch/master/graph/badge.svg?token=4HMC5S2GER)](https://codecov.io/gh/klknn/synth2)
-
-virtual-analog synth reproducing [synth1](https://www.kvraudio.com/product/synth1-by-daichi-laboratory-ichiro-toda) in D.
-
-WARNING: this plugin is very unstable.
-
-![gui](resource/screen.png)
+[![ci](https://github.com/klknn/kdr/actions/workflows/ci.yml/badge.svg)](https://github.com/klknn/kdr/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/klknn/kdr/branch/master/graph/badge.svg?token=4HMC5S2GER)](https://codecov.io/gh/klknn/kdr)
 
 ## How to build this plugin?
 
 https://github.com/AuburnSounds/Dplug/wiki/Getting-Started
 
-## Features (TODO)
+## synth2
+
+virtual-analog synth like [synth1](https://www.kvraudio.com/product/synth1-by-daichi-laboratory-ichiro-toda) in D.
+
+WARNING: this plugin is very unstable.
+
+![gui](resource/screen.png)
+
+Features (TODO)
 
 - [x] Multi-platform
   - [x] VST/VST3/AU CI build
@@ -51,7 +53,11 @@ https://github.com/AuburnSounds/Dplug/wiki/Getting-Started
   - [ ] Control change
   - [ ] Program change
 
+## reverb
+
+TBA
 
 ## History
 
-- 15 Feb 2021: Fork [poly-alias-synth](https://github.com/AuburnSounds/Dplug/tree/v10.2.1/examples/poly-alias-synth).
+- 24 Sep 2022: Move from https://github.com/klknn/synth2 to https://github.com/klknn/kdr
+- 15 Feb 2021: Fork [poly-alias-synth](https://github.com/AuburnSounds/Dplug/tree/v10.2.1/examples/poly-alias-synth) for synth2.
