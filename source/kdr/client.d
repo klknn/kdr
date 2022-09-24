@@ -5,7 +5,7 @@ Copyright: klknn 2021.
 Copyright: Elias Batek 2018.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.client;
+module kdr.client;
 
 import std.algorithm.comparison : clamp;
 import std.traits : EnumMembers;
@@ -20,18 +20,18 @@ import dplug.client.params : Parameter;
 import dplug.client.midi : MidiMessage, makeMidiMessageNoteOn, makeMidiMessageNoteOff;
 import mir.math : exp2, log, sqrt, PI, fastmath;
 
-import synth2.chorus : MultiChorus;
-import synth2.delay : Delay, DelayKind;
-import synth2.equalizer : Equalizer;
-import synth2.effect : EffectKind, MultiEffect;
-import synth2.envelope : ADSR;
-import synth2.filter : FilterKind;
-import synth2.modfilter : ModFilter;
-import synth2.lfo : Interval, LFO, Multiplier, toBar, toSeconds;
-version (unittest) {} else import synth2.gui : Synth2GUI;
-import synth2.oscillator : Oscillator;
-import synth2.waveform : Waveform;
-import synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
+import kdr.chorus : MultiChorus;
+import kdr.delay : Delay, DelayKind;
+import kdr.equalizer : Equalizer;
+import kdr.effect : EffectKind, MultiEffect;
+import kdr.envelope : ADSR;
+import kdr.filter : FilterKind;
+import kdr.modfilter : ModFilter;
+import kdr.lfo : Interval, LFO, Multiplier, toBar, toSeconds;
+version (unittest) {} else import kdr.gui : Synth2GUI;
+import kdr.oscillator : Oscillator;
+import kdr.waveform : Waveform;
+import kdr.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
 
 version (unittest) {} else {
   import dplug.client.dllmain : DLLEntryPoint, pluginEntryPoints;

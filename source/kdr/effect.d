@@ -4,7 +4,7 @@ Effect module.
 Copyright: klknn 2021.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.effect;
+module kdr.effect;
 
 import std.math : tanh, sgn;
 import std.traits : EnumMembers;
@@ -13,8 +13,8 @@ import dplug.core.math : convertLinearGainToDecibel, convertDecibelToLinearGain;
 import dplug.core.nogc : mallocNew, destroyFree;
 import mir.math : powi, exp, fabs, PI, log2, floor;
 
-import synth2.waveform : Waveform, WaveformRange;
-import synth2.filter : Filter, FilterKind, AllPassFilter;
+import kdr.waveform : Waveform, WaveformRange;
+import kdr.filter : Filter, FilterKind, AllPassFilter;
 
 /// Base effect class.
 interface IEffect {

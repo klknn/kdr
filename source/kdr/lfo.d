@@ -4,7 +4,7 @@
    Copyright: klknn 2021.
    License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.lfo;
+module kdr.lfo;
 
 import std.algorithm.comparison : min;
 import std.traits : EnumMembers;
@@ -12,7 +12,7 @@ import std.traits : EnumMembers;
 import dplug.client.client : TimeInfo;
 import dplug.client.midi : MidiMessage;
 
-import synth2.waveform : Waveform, WaveformRange;
+import kdr.waveform : Waveform, WaveformRange;
 
 /// Note duration relative to bars.
 enum Bar {

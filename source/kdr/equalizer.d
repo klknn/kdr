@@ -4,11 +4,11 @@
    Copyright: klknn 2021.
    License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.equalizer;
+module kdr.equalizer;
 
 import mir.math.common : fabs, log, fmax, exp;
 
-import synth2.filter : Filter, FilterKind;
+import kdr.filter : Filter, FilterKind;
 
 private enum bias = 1e-6;
 

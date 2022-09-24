@@ -1,4 +1,4 @@
-module synth2.random;
+module kdr.random;
 
 @nogc nothrow @safe pure
 uint rotl(const uint x, int k) {

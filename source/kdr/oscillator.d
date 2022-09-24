@@ -5,13 +5,13 @@ Copyright: klknn 2021.
 Copyright: Elias Batek 2018.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.oscillator;
+module kdr.oscillator;
 
 import dplug.client.midi : MidiMessage, MidiStatus;
 import mir.math : log2, exp2, fastmath, PI;
 
-import synth2.waveform : Waveform, WaveformRange;
-import synth2.voice : VoiceStatus;
+import kdr.waveform : Waveform, WaveformRange;
+import kdr.voice : VoiceStatus;
 
 @safe nothrow @nogc:
 

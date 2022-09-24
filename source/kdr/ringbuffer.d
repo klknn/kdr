@@ -1,4 +1,4 @@
-module synth2.ringbuffer;
+module kdr.ringbuffer;
 
 import core.memory : pureFree, pureRealloc;
 

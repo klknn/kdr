@@ -8,7 +8,7 @@
    Copyright: klknn 2021.
    License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.filter;
+module kdr.filter;
 
 import mir.math : approxEqual, PI, SQRT2, fmax;
 

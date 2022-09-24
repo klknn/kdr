@@ -4,7 +4,7 @@ Synth2 graphical user interface.
 Copyright: klknn, 2021.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.gui;
+module kdr.gui;
 
 import core.stdc.stdio : snprintf;
 import std.algorithm : max;
@@ -18,11 +18,11 @@ import dplug.flatwidgets : makeSizeConstraintsDiscrete, UIWindowResizer;
 import dplug.pbrwidgets : PBRBackgroundGUI, UILabel, UIOnOffSwitch, UIKnob, UISlider, KnobStyle, HandleStyle;
 import dplug.math : box2i, rectangle;
 
-import synth2.lfo : multiplierNames, mulToFloat, Multiplier;
-import synth2.delay : delayNames;
-import synth2.effect : effectNames;
-import synth2.filter : filterNames;
-import synth2.params : typedParam, Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
+import kdr.lfo : multiplierNames, mulToFloat, Multiplier;
+import kdr.delay : delayNames;
+import kdr.effect : effectNames;
+import kdr.filter : filterNames;
+import kdr.params : typedParam, Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
 
 // TODO: CTFE formatted names from enum values.
 private static immutable mulNames = {
@@ -118,15 +118,15 @@ class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParamete
 
     // header
     y = marginH;
-    _synth2 = _addLabel("Synth2", 0, marginH, fontLarge);
-    _date = _addLabel("v0.00 " ~ __DATE__ ~ __TIME__, _synth2.position.max.x + marginW,
-                      _synth2.position.min.y, fontMedium);
+    _kdr = _addLabel("Synth2", 0, marginH, fontLarge);
+    _date = _addLabel("v0.00 " ~ __DATE__ ~ __TIME__, _kdr.position.max.x + marginW,
+                      _kdr.position.min.y, fontMedium);
     _tempo = _addLabel("BPM000.0", _date.position.max.x + marginW,
-                       _synth2.position.min.y, fontMedium);
+                       _kdr.position.min.y, fontMedium);
 
     enum marginWSec = marginW * 5;
 
-    const osc = _buildOsc(marginW, _synth2.position.max.y + marginH);
+    const osc = _buildOsc(marginW, _kdr.position.max.y + marginH);
 
     const master = _buildMaster(osc.max.x + marginWSec, osc.min.y);
 
@@ -764,7 +764,7 @@ private:
   static immutable waveNames = ["sin", "saw", "pls", "tri", "rnd"];
   
   Font _font;
-  UILabel _tempo, _synth2, _date;
+  UILabel _tempo, _kdr, _date;
   char[10] _tempoStr;
   double _tempoValue;
   UILabel _poly, _chorusMulti;

@@ -4,13 +4,13 @@
    Copyright: klknn 2021.
    License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.modfilter;
+module kdr.modfilter;
 
 import dplug.client.midi;
 import mir.math.common : fmin, fmax, fastmath;
 
-import synth2.envelope;
-import synth2.filter;
+import kdr.envelope;
+import kdr.filter;
 
 /// Filter with MIDI and ADSR modulation.
 struct ModFilter {

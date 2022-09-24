@@ -4,7 +4,7 @@
    Copyright: klknn 2021.
    License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.params;
+module kdr.params;
 
 import std.traits : EnumMembers;
 
@@ -14,11 +14,11 @@ import dplug.client.params : BoolParameter, EnumParameter, GainParameter,
   IntegerParameter, LinearFloatParameter, LogFloatParameter, Parameter;
 import mir.math.constant : PI;
 
-import synth2.delay : DelayKind, delayNames;
-import synth2.effect : EffectKind, effectNames;
-import synth2.waveform : Waveform, waveformNames;
-import synth2.filter : filterNames, FilterKind;
-import synth2.lfo : Multiplier, multiplierNames;
+import kdr.delay : DelayKind, delayNames;
+import kdr.effect : EffectKind, effectNames;
+import kdr.waveform : Waveform, waveformNames;
+import kdr.filter : filterNames, FilterKind;
+import kdr.lfo : Multiplier, multiplierNames;
 
 /// Parameter ids.
 enum Params : int {

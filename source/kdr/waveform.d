@@ -4,11 +4,11 @@ Waveform module.
 Copyright: klknn 2021.
 License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
-module synth2.waveform;
+module kdr.waveform;
 
 import mir.math : sin, PI, M_1_PI, M_2_PI, fmin, fastmath, fma;
 
-import synth2.random : Xorshiro128Plus;
+import kdr.random : Xorshiro128Plus;
 
 /// Waveform kind.
 enum Waveform {

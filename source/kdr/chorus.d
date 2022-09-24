@@ -1,10 +1,10 @@
-module synth2.chorus;
+module kdr.chorus;
 
 import dplug.client.client : TimeInfo;
 
-import synth2.delay : Delay, DelayKind;
-import synth2.lfo : LFO, Multiplier;
-import synth2.waveform : Waveform;
+import kdr.delay : Delay, DelayKind;
+import kdr.lfo : LFO, Multiplier;
+import kdr.waveform : Waveform;
 
 
 /// Chorus adds short modurated delay sounds.

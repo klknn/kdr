@@ -1,6 +1,6 @@
-module synth2.delay;
+module kdr.delay;
 
-import synth2.ringbuffer : RingBuffer;
+import kdr.ringbuffer : RingBuffer;
 
 /// Maximum delay interval in seconds.
 enum maxDelaySec = 10.0f;
