@@ -1,37 +1,40 @@
 module kdr.random;
 
 @nogc nothrow @safe pure
-uint rotl(const uint x, int k) {
+private uint rotl(const uint x, int k) {
   return (x << k) | (x >> (32 - k));
 }
 
 @nogc nothrow @safe pure
-ulong splitmix64(ulong x) {
+private ulong splitmix64(ulong x) {
   ulong z = (x += 0x9e3779b97f4a7c15);
   z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
   z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
   return z ^ (z >> 31);
 }
 
-// Based on https://prng.di.unimi.it/xoshiro128plus.c
+/// Random number generator based on https://prng.di.unimi.it/xoshiro128plus.c
 struct Xorshiro128Plus {
   @nogc nothrow pure @safe:
 
+  /// ctor.
   this(ulong seed) {
     s[0] = cast(uint) seed;
     s[1] = seed >> 32;
 
-    ulong sp = splitmix64(seed);
+    const ulong sp = splitmix64(seed);
     s[2] = cast(uint) sp;
     s[3] = sp >> 32;
 
     assert(!(s[0] == 0 && s[1] == 0 && s[2] == 0 && s[3] == 0));
   }
 
+  /// Returns: a random number.
   uint front() const {
     return s[0] + s[3];
   }
 
+  /// Updates random states.
   void popFront() {
     const uint t = s[1] << 9;
 
@@ -45,17 +48,17 @@ struct Xorshiro128Plus {
     s[3] = rotl(s[3], 11);
   }
 
-  /* This is the jump function for the generator. It is equivalent
-     to 2^64 calls to popFront(); it can be used to generate 2^64
-     non-overlapping subsequences for parallel computations. */
+  /// This is the jump function for the generator. It is equivalent
+  /// to 2^64 calls to popFront(); it can be used to generate 2^64
+  /// non-overlapping subsequences for parallel computations.
   void jump() {
     _jump!([0x8764000b, 0xf542d2d3, 0x6fa035c3, 0x77f2db5b]);
   }
 
-  /* This is the long-jump function for the generator. It is equivalent to
-     2^96 calls to popFront(); it can be used to generate 2^32 starting points,
-     from each of which jump() will generate 2^32 non-overlapping
-     subsequences for parallel distributed computations. */
+  /// This is the long-jump function for the generator. It is equivalent to
+  /// 2^96 calls to popFront(); it can be used to generate 2^32 starting points,
+  /// from each of which jump() will generate 2^32 non-overlapping
+  /// subsequences for parallel distributed computations.
   void longJump() {
     _jump!([0xb523952e, 0x0b6f099f, 0xccf5a0ef, 0x1c580662]);
   }
@@ -75,6 +78,7 @@ private:
     s[] = a[];
   }
 
+  /// Random number states.
   uint[4] s = [0, 0, cast(uint) splitmix64(0), splitmix64(0) >> 32];
 }
 
@@ -83,7 +87,7 @@ unittest {
   Xorshiro128Plus rng0, rng1, rng2;
   assert(rng0.s == rng1.s, "initial seeds should be equal.");
 
-  uint x0 = rng0.front();
+  const uint x0 = rng0.front();
   assert(x0 == rng1.front(), "front should be the same if seeds are equal.");
 
   rng0.popFront();

@@ -41,7 +41,7 @@ jobs:
         compiler: ${{ matrix.compiler }}
 
     - name: D-Scanner
-      run: dub fetch dscanner && dub run dscanner -- --styleCheck source
+      run: dub fetch dscanner && dub run dscanner -- --styleCheck source bin
 
     - name: Test
       run: |
