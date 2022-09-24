@@ -6,7 +6,7 @@ License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 */
 module kdr.waveform;
 
-import mir.math : sin, PI, M_1_PI, M_2_PI, fmin, fastmath, fma;
+import mir.math : sin, PI, M_1_PI, M_2_PI, fmin, fastmath, fmuladd;
 
 import kdr.random : Xorshiro128Plus;
 
@@ -33,15 +33,15 @@ struct WaveformRange {
   float front() const {
     final switch (this.waveform) {
       case Waveform.saw:
-        return fma(- M_1_PI, this.phase, 1f);
+        return fmuladd(- M_1_PI, this.phase, 1f);
       case Waveform.sine:
         return sin(this.phase);
       case Waveform.pulse:
         return this.phase <= this.pulseWidth * 2 * PI ? 1f : -1f;
       case Waveform.triangle:
-        return fma(M_2_PI, fmin(this.phase, 2 * PI - this.phase), -1f);
+        return fmuladd(M_2_PI, fmin(this.phase, 2 * PI - this.phase), -1f);
       case Waveform.noise:
-        return fma(2f / uint.max, cast(float) this.rng.front, - 1f);
+        return fmuladd(2f / uint.max, cast(float) this.rng.front, - 1f);
     }
   }
 
