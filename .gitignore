@@ -9,10 +9,9 @@
 !.gitignore
 !LICENSE
 
-!tool/
-
 !source/
 !source/kdr/
+!bin/
 
 !resource/
 !resource/*.ver
