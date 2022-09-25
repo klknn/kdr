@@ -9,9 +9,8 @@ module kdr.synth2.params;
 import std.traits : EnumMembers;
 
 import dplug.core.nogc : destroyFree, mallocNew;
-import dplug.core.vec : makeVec, Vec;
 import dplug.client.params : BoolParameter, EnumParameter, GainParameter,
-  IntegerParameter, LinearFloatParameter, LogFloatParameter, Parameter;
+  IntegerParameter, LinearFloatParameter, LogFloatParameter;
 import mir.math.constant : PI;
 
 import kdr.delay : DelayKind, delayNames;
@@ -19,8 +18,10 @@ import kdr.effect : EffectKind, effectNames;
 import kdr.waveform : Waveform, waveformNames;
 import kdr.filter : filterNames, FilterKind;
 import kdr.lfo : Multiplier, multiplierNames;
+import kdr.params : registerBuilder;
 
 /// Parameter ids.
+@registerBuilder!ParamBuilder
 enum Params : int {
   /// Oscillator section
   osc1Waveform,
@@ -557,34 +558,4 @@ struct ParamBuilder {
     return mallocNew!LinearFloatParameter(
         Params.chorusWidth, "Chorus/Width", "", 0, 1, 0);
   }
-
-  @nogc nothrow:
-  static Parameter[] buildParameters() {
-    auto params = makeVec!Parameter(EnumMembers!Params.length);
-    static foreach (i, pname; paramNames) {
-      params[i] = __traits(getMember, ParamBuilder, pname)();
-      assert(i == params[i].index, pname ~ " has wrong index.");
-    }
-    return params.releaseData();
-  }
-}
-
-/// Casts types from untyped parameters using parameter id.
-/// Params:
-///   pid = Params enum id.
-///   params = type-erased parameter array.
-/// Returns: statically-known typed param.
-auto typedParam(Params pid)(Parameter[] params) {
-  alias T = typeof(__traits(getMember, ParamBuilder, paramNames[pid])());
-  auto ret = cast(T) params[pid];
-  assert(ret !is null);
-  return ret;
-}
-
-///
-@nogc nothrow
-unittest {
-  Parameter[1] ps;
-  ps[0] = ParamBuilder.osc1Waveform();
-  assert(is(typeof(typedParam!(Params.osc1Waveform)(ps[])) == EnumParameter));
 }

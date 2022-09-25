@@ -1,0 +1,9 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"dplug": "12.7.19",
+		"intel-intrinsics": "1.10.6",
+		"kdr": {"path":"../.."},
+		"mir-core": "1.3.6"
+	}
+}

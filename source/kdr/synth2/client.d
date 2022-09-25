@@ -29,6 +29,7 @@ import kdr.filter : FilterKind;
 import kdr.modfilter : ModFilter;
 import kdr.lfo : Interval, LFO, Multiplier, toBar, toSeconds;
 import kdr.oscillator : Oscillator;
+import kdr.params : buildParams;
 import kdr.waveform : Waveform;
 import kdr.synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
 version (unittest) {} else import kdr.synth2.gui : Synth2GUI;
@@ -62,7 +63,7 @@ class Synth2Client : Client {
   }
 
   override Parameter[] buildParameters() {
-    return ParamBuilder.buildParameters();
+    return buildParams!Params;
   }
 
   override LegalIO[] buildLegalIO() {

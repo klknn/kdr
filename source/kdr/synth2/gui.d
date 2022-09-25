@@ -19,10 +19,11 @@ import dplug.pbrwidgets : PBRBackgroundGUI, UILabel, UIOnOffSwitch, UIKnob, UISl
 import dplug.math : box2i, rectangle;
 
 import kdr.lfo : multiplierNames, mulToFloat, Multiplier;
+import kdr.params : typedParam;
 import kdr.delay : delayNames;
 import kdr.effect : effectNames;
 import kdr.filter : filterNames;
-import kdr.synth2.params : typedParam, Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
+import kdr.synth2.params : Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
 
 // TODO: CTFE formatted names from enum values.
 private static immutable mulNames = {

@@ -3,13 +3,13 @@
     "vendorName": "kdr",
     "vendorUniqueID": "KDR_",
     "vendorSupportEmail": "klknn.gh@gmail.com",
-    "pluginName": "synth2",
+    "pluginName": "kdr-hibiki",
     "pluginHomepage": "https://github.com/klknn/kdr",
-    "pluginUniqueID": "syn2",
+    "pluginUniqueID": "khbk",
     "publicVersion": "1.0.0",
     "CFBundleIdentifierPrefix": "com.kdr",
-    "hasGUI": true,
-    "isSynth": true,
+    "hasGUI": false,
+    "isSynth": false,
     "receivesMIDI": true,
-    "category": "instrumentSynthesizer"
+    "category": "effectReverb"
 }
