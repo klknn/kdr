@@ -18,10 +18,10 @@ import kdr.effect : EffectKind, effectNames;
 import kdr.waveform : Waveform, waveformNames;
 import kdr.filter : filterNames, FilterKind;
 import kdr.lfo : Multiplier, multiplierNames;
-import kdr.params : registerBuilder;
+import kdr.params : RegisterBuilder;
 
 /// Parameter ids.
-@registerBuilder!ParamBuilder
+@RegisterBuilder!ParamBuilder
 enum Params : int {
   /// Oscillator section
   osc1Waveform,

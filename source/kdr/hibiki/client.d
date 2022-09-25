@@ -3,17 +3,30 @@ module kdr.hibiki.client;
 import std.math;
 import dplug.core;
 import dplug.client;
+import kdr.params;
 
-enum {
-  paramOnOff
+/// Plugin parameter IDs.
+@RegisterBuilder!ParamBuilder
+enum Params {
+  onOff,
 }
 
-// Reverb effect client.
+/// Plugin parameter definitions.
+struct ParamBuilder {
+  /// Returns: bool on/off switch.
+  static onOff() {
+    return mallocNew!BoolParameter(Params.onOff, "onOff", true);
+  }
+}
+
+
+/// Reverb effect client.
 class HibikiClient : Client {
 public:
   nothrow:
   @nogc:
 
+  /// ctor.
   this()
   {
   }
@@ -25,9 +38,7 @@ public:
 
   override Parameter[] buildParameters()
   {
-    auto params = makeVec!Parameter();
-    params ~= mallocNew!BoolParameter(paramOnOff, "on/off", true);
-    return params.releaseData();
+    return buildParams!Params;
   }
 
   override LegalIO[] buildLegalIO()
@@ -43,15 +54,12 @@ public:
 
   override void processAudio(const(float*)[] inputs, float*[]outputs, int frames, TimeInfo info) nothrow @nogc
   {
-    if (readParam!bool(paramOnOff))
-      {
-        outputs[0][0..frames] = ( (inputs[0][0..frames] + inputs[1][0..frames]) ) * SQRT1_2;
-        outputs[1][0..frames] = ( (inputs[0][0..frames] - inputs[1][0..frames]) ) * SQRT1_2;
-      }
-    else
-      {
-        outputs[0][0..frames] = inputs[0][0..frames];
-        outputs[1][0..frames] = inputs[1][0..frames];
-      }
+    if (readParam!bool(Params.onOff)) {
+      outputs[0][0..frames] = (inputs[0][0..frames] + inputs[1][0..frames]) * SQRT1_2;
+      outputs[1][0..frames] = (inputs[0][0..frames] - inputs[1][0..frames]) * SQRT1_2;
+    } else {
+      outputs[0][0..frames] = inputs[0][0..frames];
+      outputs[1][0..frames] = inputs[1][0..frames];
+    }
   }
 }
