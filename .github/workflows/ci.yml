@@ -39,12 +39,12 @@ jobs:
     steps:
     # Checkout
     - name: Checkout master branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - name: Checkout Dplug repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
         repository: AuburnSounds/Dplug
@@ -53,12 +53,9 @@ jobs:
     # Cache
     - name: Cache
       id: kdr-cache
-      uses: actions/cache@v2
-      env:
-        cache-name: kdr-cache
+      uses: actions/cache@v3
       with:
-        path: |
-          ${{ env.VST2_SDK }}
+        path: ${{ env.VST2_SDK }}
         key: kdr-cache
 
     # Install
@@ -115,7 +112,7 @@ jobs:
         7z a ${{ matrix.os }}-${{ matrix.plugin }}.zip ./bin/${{ matrix.plugin }}/builds
 
     - name: Upload
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.os }}-${{ matrix.plugin }}
         path: ${{ matrix.os }}-${{ matrix.plugin }}.zip
