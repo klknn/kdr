@@ -5,6 +5,8 @@ import dplug.client;
 import kdr.ringbuffer;
 
 struct AllPassFilter {
+  /// Returns: the filtered output.
+  /// Params: x = the signal input.
   @nogc nothrow pure
   float apply(const float x) {
     const float dx = _buffer.front;

@@ -20,11 +20,11 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-latest
         arch:
           - 'x86_64'
         compiler:
-          - 'dmd-beta'
+          # - 'dmd-beta'
           - 'dmd-latest'
     steps:
     - name: Checkout master branch
