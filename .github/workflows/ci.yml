@@ -31,6 +31,9 @@ jobs:
           - windows-latest
           - ubuntu-latest
           - macOS-latest
+        plugin:
+          - synth2
+          - freeverb
         compiler:
           - 'ldc-latest'
     steps:
@@ -94,8 +97,7 @@ jobs:
       run: |
         dub test
 
-    ## Synth2 Plugin
-    - name: Build synth2
+    - name: Build
       run: |
         if ("${{ matrix.os }}" -like 'windows*') {
           $Plugins = "-c VST2 -c VST3"
@@ -106,27 +108,23 @@ jobs:
         }
         $esc = '--%'
         ${{ env.DPlugBuild }} $esc $Plugins --final
-      working-directory: bin/synth2
-
-    # Upload
-    # This task uploads the builds directory that contains all artifacts produced by dplug-build
-    # You may need to repeat this for each plugin that you build
-    # Pattern matching is not supported here
-    - name: Upload synth2
-      uses: actions/upload-artifact@v2
-      with:
-        name: synth2-${{ matrix.os }}
-        path: ./bin/synth2/builds/
+      working-directory: bin/${{ matrix.plugin }}
 
     - name: Archive zip
       run: |
-        7z a ${{ matrix.os }}.zip ./bin/synth2/builds
+        7z a ${{ matrix.os }}-${{ matrix.plugin }}.zip ./bin/${{ matrix.plugin }}/builds
+
+    - name: Upload
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ matrix.os }}-${{ matrix.plugin }}
+        path: ${{ matrix.os }}-${{ matrix.plugin }}.zip
 
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: ${{ matrix.os }}.zip
+        files: ${{ matrix.os }}-${{ matrix.plugin }}.zip
 
   Skip:
     if: "contains(github.event.head_commit.message, '[skip ci]')"
