@@ -233,10 +233,10 @@ class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParamete
   void onEndParameterEdit(Parameter) {}
 
   ///
-  void onBeginParameterHover(Parameter sender) {}
+  void onBeginParameterHover(Parameter) {}
 
   ///
-  void onEndParameterHover(Parameter sender) {}
+  void onEndParameterHover(Parameter) {}
 
 private:
 
