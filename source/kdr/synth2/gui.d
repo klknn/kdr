@@ -97,7 +97,7 @@ unittest {
 }
 
 version (unittest) {} else:
-                        
+
 /// GUI class.
 class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParameterListener {
  public:
@@ -146,7 +146,7 @@ class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParamete
 
     // const eq =
     _buildEQ(effect.max.x + marginWSec, effect.min.y);
-    
+
     const delay = _buildDelay(filter.max.x + marginWSec, effect.max.y + marginH * 3);
 
     // const chorus =
@@ -160,7 +160,7 @@ class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParamete
 
     // const voice =
     _buildVoice(lfo2.max.x + marginWSec, lfo2.min.y);
-    
+
     addChild(_resizerHint = mallocNew!UIWindowResizer(this.context()));
 
     _defaultRects = makeVec!box2i(_children.length);
@@ -231,6 +231,12 @@ class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParamete
 
   ///
   void onEndParameterEdit(Parameter) {}
+
+  ///
+  void onBeginParameterHover(Parameter sender) {}
+
+  ///
+  void onEndParameterHover(Parameter sender) {}
 
 private:
 
@@ -763,7 +769,7 @@ private:
 
   static immutable pitchLabels = ["-12", "-6", "0", "6", "12"];
   static immutable waveNames = ["sin", "saw", "pls", "tri", "rnd"];
-  
+
   Font _font;
   UILabel _tempo, _kdr, _date;
   char[10] _tempoStr;

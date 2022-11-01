@@ -17,8 +17,8 @@
         }
     },
     "dependencies": {
-        "dplug:flat-widgets": "~>12.7",
-        "dplug:pbr-widgets": "~>12.7",
+        "dplug:flat-widgets": "~>13.0",
+        "dplug:pbr-widgets": "~>13.0",
         "mir-core": "~>1.3"
     },
     "name": "kdr",
