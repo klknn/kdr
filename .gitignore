@@ -1,4 +1,6 @@
 *
+.*
+builds/
 
 !*/
 !*.d
@@ -6,11 +8,15 @@
 !*.json
 !*.md
 !*.py
+!*.bzl
+!BUILD
+!WORKSPACE
 !.gitignore
 !LICENSE
 
 !source/
 !bin/
+!rules/
 
 !resource/
 !resource/*.ver
@@ -21,6 +27,3 @@
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml
-
-.*
-builds/

@@ -1,0 +1,46 @@
+name: bazel
+
+on:
+  push:
+  # Nightly builds
+  schedule:
+    - cron: '00 00 * * *'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          # TODO(klknn): Support Windows cache
+          # https://qiita.com/homulerdora/items/12745a02a2663bc956fd#%E8%A7%A3%E6%B1%BA%E7%AD%96
+          # - windows-latest
+        arch:
+          - 'x86_64'
+        compiler:
+          - 'ldc2'
+          - 'dmd'
+
+    steps:
+      - name: Cache bazel
+        uses: actions/cache@v3
+        env:
+          cache-name: bazel-cache
+        with:
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel
+          key: ${{ matrix.os }}-${{ matrix.compiler }}-${{ env.cache-name }}
+
+      - uses: actions/checkout@v3
+
+      - name: Test
+        # TODO(klknn): Fix dmd+macos linker errors:
+        # https://github.com/klknn/kdr/actions/runs/3382812329/jobs/5618111876
+        if: (startsWith(matrix.compiler,'dmd') && startsWith(matrix.os,'macos')) != true
+        run: |
+          bazel test  --test_output=all --test_verbose_timeout_warnings \
+            $(bazel query //...) --//rules:d_compiler=${{ matrix.compiler }}
