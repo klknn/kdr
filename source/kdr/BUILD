@@ -10,5 +10,5 @@ d_library(
 d_test(
     name = "random_test",
     srcs = ["random.d"],
-    deps = [":random"],
+    size = "small",
 )
