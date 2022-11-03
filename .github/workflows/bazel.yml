@@ -15,9 +15,7 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
-          # TODO(klknn): Support Windows cache
-          # https://qiita.com/homulerdora/items/12745a02a2663bc956fd#%E8%A7%A3%E6%B1%BA%E7%AD%96
-          # - windows-latest
+          - windows-latest
         arch:
           - 'x86_64'
         compiler:
@@ -27,6 +25,9 @@ jobs:
     steps:
       - name: Cache bazel
         uses: actions/cache@v3
+        # TODO(klknn): Support Windows/MacOS cache
+        # https://qiita.com/homulerdora/items/12745a02a2663bc956fd#%E8%A7%A3%E6%B1%BA%E7%AD%96
+        if: startsWith(matrix.os,'ubuntu')
         env:
           cache-name: bazel-cache
         with:
