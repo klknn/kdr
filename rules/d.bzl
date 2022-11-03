@@ -77,7 +77,8 @@ def _build_compile_arglist(ctx, out, depinfo, extra_flags = []):
          "-I" + _files_directory(toolchain.runtime_import_src)] +
         ["%s=Have_%s" % (toolchain.flag_version, _format_version(ctx.label.name))] +
         ["%s=%s" % (toolchain.flag_version, v) for v in ctx.attr.versions] +
-        ["%s=%s" % (toolchain.flag_version, v) for v in depinfo.versions]
+        ["%s=%s" % (toolchain.flag_version, v) for v in depinfo.versions] +
+        ["-J=" + f.dirname for f in ctx.files.string_imports]
     )
 
 def _build_link_arglist(ctx, objs, out, depinfo):
@@ -119,7 +120,7 @@ def _setup_deps(ctx, deps, name, working_dir):
             to the D compiler via -I flags.
         link_flags: List of linker flags.
     """
-
+    print("name=", name, ", deps=", deps)
     libs = []
     transitive_libs = []
     d_srcs = []
@@ -192,6 +193,7 @@ def _d_library_impl(ctx):
     toolchain = d_toolchain(ctx)
     compile_inputs = depset(
         ctx.files.srcs +
+        ctx.files.string_imports +
         depinfo.d_srcs +
         toolchain.stdlib +
         toolchain.stdlib_src +
@@ -254,7 +256,10 @@ def _d_binary_impl_common(ctx, extra_flags = []):
     )
 
     compile_inputs = depset(
-        ctx.files.srcs + depinfo.d_srcs + toolchain_files,
+        ctx.files.srcs +
+        ctx.files.string_imports +
+        depinfo.d_srcs +
+        toolchain_files,
         transitive = [depinfo.transitive_d_srcs],
     )
     ctx.actions.run(
@@ -368,6 +373,7 @@ def _d_source_library_impl(ctx):
 _d_public_attrs = {
     "srcs": attr.label_list(allow_files = [".d", ".di"]),
     "imports": attr.string_list(),
+    "string_imports": attr.label_list(),
     "linkopts": attr.string_list(),
     "versions": attr.string_list(),
     "deps": attr.label_list(),
@@ -397,3 +403,7 @@ d_test = rule(
     executable = True,
     test = True,
 )
+
+def d_library_with_test(name, size = "small", timeout = "short", **kwargs):
+    d_library(name = name, **kwargs)
+    d_test(name = name + "_test", size = size, timeout = timeout, **kwargs)

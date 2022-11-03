@@ -1,0 +1,9 @@
+[submodule "third_party/mir-core"]
+	path = third_party/mir-core
+	url = https://github.com/libmir/mir-core
+[submodule "third_party/Dplug"]
+	path = third_party/Dplug
+	url = https://github.com/AuburnSounds/Dplug
+[submodule "third_party/intel-intrinsics"]
+	path = third_party/intel-intrinsics
+	url = https://github.com/AuburnSounds/intel-intrinsics
