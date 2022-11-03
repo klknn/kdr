@@ -305,7 +305,8 @@ def _d_binary_impl(ctx):
 
 def _d_test_impl(ctx):
     """Implementation of the d_test rule."""
-    return _d_binary_impl_common(ctx, extra_flags = ["-unittest", "-main"])
+    # TODO(klknn): Find cov files.
+    return _d_binary_impl_common(ctx, extra_flags = ["-unittest", "-cov", "-main"])
 
 def _get_libs_for_static_executable(dep):
     """

@@ -1,0 +1,42 @@
+name: bazel
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          # TODO(klknn): Support Windows cache
+          # https://qiita.com/homulerdora/items/12745a02a2663bc956fd#%E8%A7%A3%E6%B1%BA%E7%AD%96
+          # - windows-latest
+        arch:
+          - 'x86_64'
+        compiler:
+          - 'ldc-latest'
+          - 'dmd-latest'
+
+    steps:
+      - name: Cache bazel
+        uses: actions/cache@v3
+        env:
+          cache-name: bazel-cache
+        with:
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel
+          key: ${{ matrix.os }}-${{ matrix.compiler }}-${{ env.cache-name }}
+
+      - uses: actions/checkout@v3
+
+      - name: Test LDC2
+        if: startsWith(matrix.compiler,'ldc')
+        run: bazel test  --test_output=all $(bazel query //...) --//rules:d_compiler=ldc2
+
+      - name: Test DMD
+        if: startsWith(matrix.compiler,'dmd')
+        run: bazel test  --test_output=all $(bazel query //...) --//rules:d_compiler=dmd

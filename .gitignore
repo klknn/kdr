@@ -1,4 +1,6 @@
 *
+.*
+builds/
 
 !*/
 !*.d
@@ -25,6 +27,3 @@
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml
-
-.*
-builds/
