@@ -61,7 +61,7 @@ def _files_directory(files):
             dir = f.dirname
     return dir
 
-def _build_compile_arglist(ctx, out, depinfo, extra_flags = []):
+def _build_compile_arglist(ctx, out, depinfo, imports, string_imports, extra_flags = []):
     """Returns a list of strings constituting the D compile command arguments."""
     toolchain = d_toolchain(ctx)
     return (
@@ -72,13 +72,13 @@ def _build_compile_arglist(ctx, out, depinfo, extra_flags = []):
             "-w",
         ] +
         ["-I%s" % _build_import(ctx.label, im) for im in ctx.attr.imports] +
-        ["-I%s" % im for im in depinfo.imports] +
+        ["-I%s" % im for im in imports] +
         ["-I" + _files_directory(toolchain.stdlib_src),
          "-I" + _files_directory(toolchain.runtime_import_src)] +
         ["%s=Have_%s" % (toolchain.flag_version, _format_version(ctx.label.name))] +
         ["%s=%s" % (toolchain.flag_version, v) for v in ctx.attr.versions] +
         ["%s=%s" % (toolchain.flag_version, v) for v in depinfo.versions] +
-        ["-J=" + f.dirname for f in ctx.files.string_imports]
+        ["-J=" + f.dirname for f in string_imports]
     )
 
 def _build_link_arglist(ctx, objs, out, depinfo):
@@ -88,7 +88,7 @@ def _build_link_arglist(ctx, objs, out, depinfo):
         _compilation_mode_flags(ctx) +
         ["-of" + out.path] +
         [("-L/LIBPATH:" if _is_windows(ctx) else "-L-L") + toolchain.stdlib[0].dirname] +
-        [f.path for f in depset(transitive = [depinfo.libs, depinfo.transitive_libs]).to_list()] +
+        [f.path for f in depset(transitive = [depinfo.libs, depinfo.transitive_libs], order = "topological").to_list()] +
         depinfo.link_flags +
         objs
     )
@@ -120,7 +120,6 @@ def _setup_deps(ctx, deps, name, working_dir):
             to the D compiler via -I flags.
         link_flags: List of linker flags.
     """
-    print("name=", name, ", deps=", deps)
     libs = []
     transitive_libs = []
     d_srcs = []
@@ -175,11 +174,18 @@ def _d_library_impl(ctx):
     # Dependencies
     depinfo = _setup_deps(ctx, ctx.attr.deps, ctx.label.name, d_lib.dirname)
 
+    # TODO(klknn): Combine these transitive fields into struct.
+    trans_imports = depset(depinfo.imports, transitive = [d.trans_imports for d in ctx.attr.deps])
+    trans_d_srcs = depset(depinfo.d_srcs, transitive = [d.trans_d_srcs for d in ctx.attr.deps])
+    trans_string_imports = depset(ctx.files.string_imports, transitive = [d.trans_string_imports for d in ctx.attr.deps])
+
     # Build compile command.
     compile_args = _build_compile_arglist(
         ctx = ctx,
         out = d_lib,
         depinfo = depinfo,
+        imports = trans_imports.to_list(),
+        string_imports = trans_string_imports.to_list(),
         extra_flags = ["-lib"],
     )
 
@@ -193,10 +199,11 @@ def _d_library_impl(ctx):
     toolchain = d_toolchain(ctx)
     compile_inputs = depset(
         ctx.files.srcs +
-        ctx.files.string_imports +
+        trans_string_imports.to_list() +
         depinfo.d_srcs +
         toolchain.stdlib +
         toolchain.stdlib_src +
+        trans_d_srcs.to_list() +
         toolchain.runtime_import_src,
         transitive = [
             depinfo.transitive_d_srcs,
@@ -220,11 +227,15 @@ def _d_library_impl(ctx):
         files = depset([d_lib]),
         d_srcs = ctx.files.srcs,
         transitive_d_srcs = depset(depinfo.d_srcs),
+        trans_d_srcs = trans_d_srcs,
         transitive_libs = depset(transitive = [depinfo.libs, depinfo.transitive_libs]),
         link_flags = depinfo.link_flags,
         versions = ctx.attr.versions,
         imports = ctx.attr.imports,
+        trans_imports = trans_imports,
+        trans_string_imports = trans_string_imports,
         d_lib = d_lib,
+        deps = ctx.attr.deps,
     )
 
 def _d_binary_impl_common(ctx, extra_flags = []):
@@ -232,12 +243,17 @@ def _d_binary_impl_common(ctx, extra_flags = []):
     d_bin = ctx.actions.declare_file(ctx.label.name + ".exe" if _is_windows(ctx) else ctx.label.name)
     d_obj = ctx.actions.declare_file(ctx.label.name + (".obj" if _is_windows(ctx) else ".o"))
     depinfo = _setup_deps(ctx, ctx.attr.deps, ctx.label.name, d_bin.dirname)
+    trans_imports = depset(depinfo.imports, transitive = [d.trans_imports for d in ctx.attr.deps])
+    trans_d_srcs = depset(depinfo.d_srcs, transitive = [d.trans_d_srcs for d in ctx.attr.deps])
+    trans_string_imports = depset(ctx.files.string_imports, transitive = [d.trans_string_imports for d in ctx.attr.deps])
 
     # Build compile command
     compile_args = _build_compile_arglist(
         ctx = ctx,
         depinfo = depinfo,
         out = d_obj,
+        imports = trans_imports.to_list(),
+        string_imports = trans_string_imports.to_list(),
         extra_flags = ["-c"] + extra_flags,
     )
 
@@ -257,7 +273,8 @@ def _d_binary_impl_common(ctx, extra_flags = []):
 
     compile_inputs = depset(
         ctx.files.srcs +
-        ctx.files.string_imports +
+        trans_d_srcs.to_list() +
+        trans_string_imports.to_list() +
         depinfo.d_srcs +
         toolchain_files,
         transitive = [depinfo.transitive_d_srcs],
@@ -302,6 +319,9 @@ def _d_binary_impl_common(ctx, extra_flags = []):
         transitive_d_srcs = depset(depinfo.d_srcs),
         imports = ctx.attr.imports,
         executable = d_bin,
+        trans_imports = trans_imports,
+        trans_d_srcs = trans_d_srcs,
+        trans_string_imports = trans_string_imports,
     )
 
 def _d_binary_impl(ctx):

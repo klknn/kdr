@@ -7,7 +7,6 @@ d_library(
     name = "internal",
     srcs = glob(["source/mir/internal/*.d"]),
     imports = ["source"],
-    visibility = ["//visibility:private"]
 )
 
 d_library(

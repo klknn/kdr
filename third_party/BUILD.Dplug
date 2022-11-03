@@ -12,7 +12,7 @@ d_library(
 
 d_library(
     name = "client",
-    srcs = glob(["core/dplug/core/*.d"]),
+    srcs = glob(["client/dplug/client/*.d"]),
     imports = ["client"],
     deps = [":core"],
 )
