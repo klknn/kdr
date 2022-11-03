@@ -88,7 +88,7 @@ def _build_link_arglist(ctx, objs, out, depinfo):
         _compilation_mode_flags(ctx) +
         ["-of" + out.path] +
         [("-L/LIBPATH:" if _is_windows(ctx) else "-L-L") + toolchain.stdlib[0].dirname] +
-        [f.path for f in depset(transitive = [depinfo.libs, depinfo.transitive_libs], order = "topological").to_list()] +
+        [f.path for f in depinfo.libs.to_list() + depinfo.transitive_libs.to_list()] +
         depinfo.link_flags +
         objs
     )
