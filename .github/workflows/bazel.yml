@@ -8,6 +8,10 @@ on:
 
 jobs:
   test:
+    defaults:
+      run:
+        shell: bash
+
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
