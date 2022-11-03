@@ -17,6 +17,8 @@ builds/
 !source/
 !bin/
 !rules/
+!third_party/*
+third_party/*~
 
 !resource/
 !resource/*.ver

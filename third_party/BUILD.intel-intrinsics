@@ -1,0 +1,12 @@
+# -*- mode: bazel-build -*-
+package(default_visibility = ["//visibility:public"])
+
+load("@//rules:d.bzl", "d_library")
+
+d_library(
+    name = "intel-intrinsics",
+    srcs = glob(["source/inteli/*.d"]),
+    imports = ["source"],
+)
+
+# TODO(klknn): Add tests.

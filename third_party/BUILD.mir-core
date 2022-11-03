@@ -1,0 +1,26 @@
+# -*- mode: bazel-build -*-
+package(default_visibility = ["//visibility:public"])
+
+load("@//rules:d.bzl", "d_library")
+
+d_library(
+    name = "internal",
+    srcs = glob(["source/mir/internal/*.d"]),
+    imports = ["source"],
+)
+
+d_library(
+    name = "math",
+    srcs = glob(["source/mir/math/*.d"]),
+    deps = [":internal"],
+    imports = ["source"],
+)
+
+d_library(
+    name = "complex",
+    srcs = glob(["source/mi/complex/*.d"]),
+    deps = [":math"],
+    imports = ["source"],
+)
+
+# TODO(klknn): Add all the modules and tests.

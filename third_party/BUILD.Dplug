@@ -1,0 +1,21 @@
+# -*- mode: bazel-build -*-
+package(default_visibility = ["//visibility:public"])
+
+load("@//rules:d.bzl", "d_library")
+
+d_library(
+    name = "core",
+    srcs = glob(["core/dplug/core/*.d"]),
+    imports = ["core"],
+    deps = ["@intel-intrinsics//:intel-intrinsics"],
+)
+
+d_library(
+    name = "client",
+    srcs = glob(["client/dplug/client/*.d"]),
+    imports = ["client"],
+    deps = [":core"],
+)
+
+
+# TODO(klknn): Add all the modules and tests.

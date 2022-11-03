@@ -36,6 +36,8 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.compiler }}-${{ env.cache-name }}
 
       - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
 
       - name: Test
         # TODO(klknn): Fix dmd+macos linker errors:
