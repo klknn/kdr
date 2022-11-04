@@ -78,7 +78,7 @@ filegroup(
 )
 """
 
-def ldc2_archive(name, prefix, ext):
+def ldc2_archive(name, version, prefix, ext):
     archive = prefix + ext
     return http_archive(
         name = name,
@@ -91,9 +91,9 @@ def ldc2_archive(name, prefix, ext):
 
 def ldc2_repositories(version="1.28.0"):
     # TODO(karita): Support non x86_64 arch
-    ldc2_archive("ldc2_linux_x86_64", 'ldc2-' + version + "-linux-x86_64", ".tar.xz")
-    ldc2_archive("ldc2_darwin_x86_64", 'ldc2-' + version + "-osx-x86_64", ".tar.xz")
-    ldc2_archive("ldc2_windows_x86_64", 'ldc2-' + version + "-windows-x64", ".7z")
+    ldc2_archive("ldc2_linux_x86_64", version, 'ldc2-' + version + "-linux-x86_64", ".tar.xz")
+    ldc2_archive("ldc2_darwin_x86_64", version, 'ldc2-' + version + "-osx-x86_64", ".tar.xz")
+    ldc2_archive("ldc2_windows_x86_64", version, 'ldc2-' + version + "-windows-x64", ".7z")
 
 ldc2_compile_attrs = {
     "_ldc2_flag_version": attr.string(default = "--d-version"),
