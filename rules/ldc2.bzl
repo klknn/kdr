@@ -79,11 +79,12 @@ filegroup(
 """
 
 def ldc2_archive(name, prefix, ext):
+    archive = prefix + ext
     return http_archive(
         name = name,
         urls = ["https://github.com/ldc-developers/ldc/releases/download/v" +
-                version + "/" + prefix + ext],
-        sha256 = _LDC2_SHA256SUMS[tarxz],
+                version + "/" + archive],
+        sha256 = _LDC2_SHA256SUMS[archive],
         strip_prefix=prefix,
         build_file_content = _LDC2_BUILD_FILE,
     )
