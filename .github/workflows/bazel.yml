@@ -48,9 +48,6 @@ jobs:
         # TODO(klknn): Fix dmd+macos linker errors:
         # https://github.com/klknn/kdr/actions/runs/3382812329/jobs/5618111876
         if: (startsWith(matrix.compiler,'dmd') && startsWith(matrix.os,'macos')) != true
-        env:
-          # Workaround https://github.com/bazelbuild/bazel/issues/3001#issuecomment-301422219
-          MSYS2_ARG_CONV_EXCL: "//"
         run: |
           bazel test  --test_output=all --test_verbose_timeout_warnings \
-            $(bazel query '//...') --//rules:d_compiler=${{ matrix.compiler }}
+            //source/kdr:all --//rules:d_compiler=${{ matrix.compiler }}
