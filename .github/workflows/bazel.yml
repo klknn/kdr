@@ -50,4 +50,4 @@ jobs:
         if: (startsWith(matrix.compiler,'dmd') && startsWith(matrix.os,'macos')) != true
         run: |
           bazel test  --test_output=all --test_verbose_timeout_warnings \
-            $(bazel query //...) --//rules:d_compiler=${{ matrix.compiler }}
+            $(bazel query '//...') --//rules:d_compiler=${{ matrix.compiler }}
