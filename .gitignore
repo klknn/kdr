@@ -1,6 +1,4 @@
 *
-.*
-builds/
 
 !*/
 !*.d
@@ -29,3 +27,6 @@ third_party/*~
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml
+
+builds/
+.*
