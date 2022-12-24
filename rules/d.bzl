@@ -397,6 +397,7 @@ _d_public_attrs = {
     "linkopts": attr.string_list(),
     "versions": attr.string_list(),
     "deps": attr.label_list(),
+    "linkstatic": attr.bool(default = True),
 }
 
 _d_common_attrs = dict(_d_public_attrs.items() + d_toolchain_attrs.items())
@@ -422,6 +423,15 @@ d_test = rule(
     attrs = _d_common_attrs,
     executable = True,
     test = True,
+)
+
+def _d_derelict_library_impl(ctx):
+    return struct()
+
+
+d_derelict_library = rule(
+    _d_derelict_library_impl,
+    attrs = _d_common_attrs,
 )
 
 def d_library_with_test(name, size = "small", timeout = "short", **kwargs):

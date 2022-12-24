@@ -1,4 +1,4 @@
-package(default_visibility = ["//visibility:public"])
+package(default_visibility = ["//:__subpackages__"])
 
 load("//rules:d.bzl", "d_library", "d_test", "d_library_with_test")
 
@@ -125,5 +125,16 @@ d_library_with_test(
     deps = [
         "@Dplug//:client",
         "@Dplug//:core",
+    ],
+)
+
+d_library(
+    name = "chorus",
+    srcs = ["chorus.d"],
+    imports = [".."],
+    deps = [
+        ":delay",
+        ":lfo",
+        ":waveform",
     ],
 )

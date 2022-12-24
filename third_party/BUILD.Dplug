@@ -1,13 +1,28 @@
 # -*- mode: bazel-build -*-
 package(default_visibility = ["//visibility:public"])
 
-load("@//rules:d.bzl", "d_library")
+load("@//rules:d.bzl", "d_library", "d_source_library", "d_derelict_library")
 
 d_library(
-    name = "core",
-    srcs = glob(["core/dplug/core/*.d"]),
-    imports = ["core"],
-    deps = ["@intel-intrinsics//:intel-intrinsics"],
+    name = "audio",
+    srcs = glob(["audio/dplug/audio/*.d"]),
+    imports = ["audio"],
+    deps = [
+        ":core",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "canvas",
+    srcs = glob(["canvas/dplug/canvas/*.d"]),
+    imports = ["canvas"],
+    deps = [
+        ":core",
+        ":graphics",
+        ":math",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
 )
 
 d_library(
@@ -17,5 +32,136 @@ d_library(
     deps = [":core"],
 )
 
+d_library(
+    name = "core",
+    srcs = glob(["core/dplug/core/*.d"]),
+    imports = ["core"],
+    deps = ["@intel-intrinsics//:intel-intrinsics"],
+)
 
-# TODO(klknn): Add all the modules and tests.
+d_library(
+    name = "dsp",
+    srcs = glob(["dsp/dplug/dsp/*.d"]),
+    imports = ["dsp"],
+    deps = [
+        ":core",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "fft",
+    srcs = glob(["fft/dplug/fft/*.d"]),
+    imports = ["fft"],
+    deps = [
+        ":core",
+        ":dsp",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "flatwidgets",
+    srcs = glob(["flatwidgets/dplug/flatwidgets/*.d"]),
+    imports = ["flatwidgets"],
+    deps = [
+        ":core",
+        ":graphics",
+        ":window",
+        ":gui",
+        ":canvas",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "gui",
+    srcs = glob(["gui/dplug/gui/*.d"]),
+    imports = ["gui"],
+    deps = [
+        ":math",
+        ":client",
+        ":window",
+        ":core",
+        ":graphics",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "graphics",
+    srcs = glob(["graphics/dplug/graphics/*.d"]),
+    imports = ["graphics"],
+    deps = [
+        ":core",
+        ":math",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "macos",
+    srcs = glob(["macos/derelict/cocoa/*.d", "macos/derelict/carbon/*.d"]),
+    imports = ["macos"],
+    deps = [
+        ":core",
+    ],
+)
+
+d_library(
+    name = "math",
+    srcs = glob(["math/dplug/math/*.d"]),
+    imports = ["math"],
+    deps = [
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "pbrwidgets",
+    srcs = glob(["pbrwidgets/dplug/pbrwidgets/*.d"]),
+    imports = ["pbrwidgets"],
+    deps = [
+        ":core",
+        ":graphics",
+        ":window",
+        ":client",
+        ":gui",
+    ],
+)
+
+d_library(
+    name = "vst3",
+    srcs = glob(["vst3/dplug/vst3/*.d"]),
+    imports = ["vst3"],
+    deps = [
+        ":client",
+    ],
+)
+
+d_library(
+    name = "window",
+    srcs = glob(["window/dplug/window/*.d"]),
+    imports = ["window"],
+    # TODO(klknn): libs_windows = ["gdi32", "user32"],
+    deps = [
+        ":math",
+        ":graphics",
+        ":core",
+        ":macos",
+        ":x11",
+        "@intel-intrinsics//:intel-intrinsics",
+    ],
+)
+
+d_library(
+    name = "x11",
+    srcs = glob(["x11/derelict/x11/*.d"]),
+    imports = ["x11"],
+    linkopts = ["-lX11"],
+    deps = [
+        ":core",
+    ],
+)
+
+# TODO(klknn): Add all the modules (au) and tests.
