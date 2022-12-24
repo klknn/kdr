@@ -127,3 +127,9 @@ d_library_with_test(
         "@Dplug//:core",
     ],
 )
+
+d_library_with_test(
+    name = "logging",
+    srcs = ["logging.d"],
+    imports = [".."],
+)
