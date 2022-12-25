@@ -4,6 +4,7 @@ import dplug.core;
 
 import kdr.logging;
 
+/// Dynamically adjustable envelope shaper.
 struct DynamicEnvelope {
  public:
   @nogc nothrow:
@@ -70,6 +71,7 @@ unittest {
   assert(env.getY(0.75) == 0.5);
 }
 
+/// Env tool client.
 class ClientImpl : Client {
   public nothrow @nogc:
 

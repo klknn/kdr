@@ -23,8 +23,11 @@ private ThreadID _thisThreadID() @trusted @nogc nothrow {
 
 private __gshared UncheckedMutex outMutex;
 
+/// Logging time info with usecs.
 struct LogTime {
+  /// Time info except usecs.
   tm t;
+  /// Micro seconds.
   long usec;
 
   alias t this;
@@ -38,6 +41,12 @@ private LogTime currentTime() {
       st.fracSecs().total!"usecs" % 1_000_000);
 }
 
+/// Emits log at info level.
+/// Params:
+///   fmt = C-style format string.
+///   args = arguments to be formatted.
+///   line = line number where this log is created.
+///   f = file name where this log is created.
 nothrow @nogc
 void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fmt, Args args) {
   LogTime t = assumeNothrowNoGC(&currentTime)();
