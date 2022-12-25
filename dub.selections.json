@@ -1,8 +1,8 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"dplug": "13.0.3",
-		"intel-intrinsics": "1.10.8",
-		"mir-core": "1.3.14"
+		"dplug": "13.3.0",
+		"intel-intrinsics": "1.10.10",
+		"mir-core": "1.3.15"
 	}
 }
