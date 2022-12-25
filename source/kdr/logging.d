@@ -1,7 +1,6 @@
 // -*- mode: d; c-basic-offset: 2 -*-
 module kdr.logging;
 
-import core.time;
 import core.thread.types : ThreadID;
 import core.stdc.stdio : fprintf, fputc, stderr;
 import core.stdc.time : tm;
@@ -35,7 +34,7 @@ struct LogTime {
 
 private LogTime currentTime() {
   // TODO(klknn): Make this @nogc and nothrow.
-  SysTime st = Clock.currTime;
+  const SysTime st = Clock.currTime;
   return LogTime(
       st.toTM(),
       st.fracSecs().total!"usecs" % 1_000_000);
