@@ -8,7 +8,7 @@
     "pluginUniqueID": "kenv",
     "publicVersion": "1.0.0",
     "CFBundleIdentifierPrefix": "com.kdr",
-    "hasGUI": false,
+    "hasGUI": true,
     "isSynth": false,
     "receivesMIDI": true,
     "category": "effectModulation"

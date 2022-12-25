@@ -40,14 +40,8 @@ private LogTime currentTime() {
       st.fracSecs().total!"usecs" % 1_000_000);
 }
 
-/// Emits log at info level.
-/// Params:
-///   fmt = C-style format string.
-///   args = arguments to be formatted.
-///   line = line number where this log is created.
-///   f = file name where this log is created.
-nothrow @nogc
-void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fmt, Args args) {
+private nothrow @nogc
+void logImpl(char severity, int line, string f, Args ...)(const(char)* fmt, Args args) {
   LogTime t = assumeNothrowNoGC(&currentTime)();
 
   // TODO(klknn): Support any buffer outputs in addition to stderr.
@@ -59,7 +53,7 @@ void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fm
   fprintf(
       stderr,
       "%c%02d%02d %02d:%02d:%02d.%06ld %5lu %s:%d] ",
-      'I',
+      severity,
       t.tm_mon + 1, t.tm_mday,
       t.tm_hour,
       t.tm_min,
@@ -70,6 +64,51 @@ void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fm
       line);
   fprintf(stderr, fmt, args);
   fputc('\n', stderr);
+}
+
+/// Emits log at debug level.
+/// Params:
+///   fmt = C-style format string.
+///   args = arguments to be formatted.
+///   line = line number where this log is created.
+///   file = file name where this log is created.
+nothrow @nogc
+void logDebug(int line = __LINE__, string file = __FILE__, Args ...)(const(char)* fmt, Args args) {
+  debug logImpl!('D', line, file)(fmt, args);
+}
+
+/// Emits log at info level.
+/// Params:
+///   fmt = C-style format string.
+///   args = arguments to be formatted.
+///   line = line number where this log is created.
+///   file = file name where this log is created.
+nothrow @nogc
+void logInfo(int line = __LINE__, string file = __FILE__, Args ...)(const(char)* fmt, Args args) {
+  logImpl!('I', line, file)(fmt, args);
+}
+
+/// Emits log at warning level.
+/// Params:
+///   fmt = C-style format string.
+///   args = arguments to be formatted.
+///   line = line number where this log is created.
+///   file = file name where this log is created.
+nothrow @nogc
+void logWarn(int line = __LINE__, string file = __FILE__, Args ...)(const(char)* fmt, Args args) {
+  logImpl!('W', line, file)(fmt, args);
+}
+
+/// Emits log at error level.
+/// Params:
+///   fmt = C-style format string.
+///   args = arguments to be formatted.
+///   line = line number where this log is created.
+///   file = file name where this log is created.
+nothrow @nogc
+void logError(int line = __LINE__, string file = __FILE__, Args ...)(const(char)* fmt, Args args) {
+  logImpl!('E', line, file)(fmt, args);
+  assert(false);
 }
 
 unittest {

@@ -28,6 +28,7 @@ import kdr.envelope : ADSR;
 import kdr.filter : FilterKind;
 import kdr.modfilter : ModFilter;
 import kdr.lfo : Interval, LFO, Multiplier, toBar, toSeconds;
+import kdr.logging : logInfo;
 import kdr.oscillator : Oscillator;
 import kdr.params : buildParams;
 import kdr.waveform : Waveform;
@@ -531,7 +532,7 @@ unittest {
 
   host.processAudio();  // to omit the first record.
   auto time = benchmark!(() => host.processAudio())(100)[0].split!("msecs", "usecs");
-  printf("benchmark synth2/default: %d ms %d us\n", cast(int) time.msecs, cast(int) time.usecs);
+  logInfo("benchmark synth2/default: %d ms %d us", cast(int) time.msecs, cast(int) time.usecs);
   version (OSX) {} else {
     version (LDC) assert(time.msecs <= 20);
   }
