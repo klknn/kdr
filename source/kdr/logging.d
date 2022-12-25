@@ -1,14 +1,14 @@
 // -*- mode: d; c-basic-offset: 2 -*-
 module kdr.logging;
 
-import core.sync.mutex;
 import core.time;
 import core.thread.types : ThreadID;
 import core.stdc.stdio : fprintf, fputc, stderr;
 import core.stdc.time : tm;
 import std.datetime.systime : Clock, SysTime;
 
-import dplug.core.sync;
+import dplug.core.nogc : assumeNothrowNoGC;
+import dplug.core.sync : UncheckedMutex;
 
 private ThreadID _thisThreadID() @trusted @nogc nothrow {
   version (Windows) {
@@ -23,16 +23,24 @@ private ThreadID _thisThreadID() @trusted @nogc nothrow {
 
 private __gshared UncheckedMutex outMutex;
 
-nothrow @nogc
-void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fmt, Args args) {
+struct LogTime {
   tm t;
   long usec;
-  debug {
-    // TODO(klknn): Make this @nogc.
-    SysTime st = Clock.currTime;
-    t = st.toTM();
-    usec = st.fracSecs().total!"usecs" % 1_000_000;
-  }
+
+  alias t this;
+}
+
+private LogTime currentTime() {
+  // TODO(klknn): Make this @nogc and nothrow.
+  SysTime st = Clock.currTime;
+  return LogTime(
+      st.toTM(),
+      st.fracSecs().total!"usecs" % 1_000_000);
+}
+
+nothrow @nogc
+void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fmt, Args args) {
+  LogTime t = assumeNothrowNoGC(&currentTime)();
 
   // TODO(klknn): Support any buffer outputs in addition to stderr.
   outMutex.lockLazy();
@@ -48,7 +56,7 @@ void logInfo(int line = __LINE__, string f = __FILE__, Args ...)(const(char)* fm
       t.tm_hour,
       t.tm_min,
       t.tm_sec,
-      usec, // TODO(klknn): time.millitm,
+      t.usec, // TODO(klknn): time.millitm,
       _thisThreadID,
       f.ptr,
       line);
