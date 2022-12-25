@@ -24,33 +24,56 @@ class EnvelopeUI : UIElement {
     _env.setXY(0.75, 0.5);
   }
 
+  override Click onMouseClick(int x, int y, int button, bool isDoubleClick, MouseState mstate) {
+    // Initiate drag
+    setDirtyWhole();
+
+    int i;
+    foreach (px, py; _env.points) {
+      vec2f center = fromPoint(px, py);
+      box2f circleBox = box2f(center - pointRadius, center + pointRadius);
+      if (circleBox.contains(x, y)) {
+        logDebug("clicked %d-th point", i);
+      }
+      ++i;
+    }
+    return Click.startDrag;
+  }
+
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
-    float circleRad = position.width * _circleRadiusRatio;
-    float w = position.width - circleRad * 2;
-    float h = position.height- circleRad * 2;
+    float w = position.width - pointRadius * 2;
+    float h = position.height- pointRadius * 2;
     logInfo("position %f %f", w, h);
 
     foreach (ref rect; dirtyRects) {
       ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
       _canvas.initialize(cropped);
-      _canvas.translate(circleRad -rect.min.x, circleRad-rect.min.y);
-
       _canvas.fillStyle = _lineColor;
+      _canvas.translate(-rect.min.x, -rect.min.y);
 
-      foreach (point; _env.points) {
-        _canvas.fillCircle(w * point[0], h - h * point[1], circleRad);
+      foreach (x, y; _env.points) {
+        _canvas.fillCircle(fromPoint(x, y), pointRadius);
       }
 
       _canvas.beginPath();
-      _canvas.moveTo(0, h);
-      foreach (point; _env.points) {
-        _canvas.lineTo(w * point[0], h - h * point[1]);
+      _canvas.moveTo(fromPoint(0, 0));
+      foreach (x, y; _env.points) {
+        _canvas.lineTo(fromPoint(x, y));
       }
       _canvas.fill();
     }
   }
 
  private:
+  float pointRadius() { return position.width * _circleRadiusRatio; }
+
+  // Converts point in [0, 1] to dirty rect position in UI.
+  vec2f fromPoint(float[2] p ...) {
+    float w = position.width - pointRadius * 2;
+    float h = position.height- pointRadius * 2;
+    return vec2f(w * p[0] + pointRadius, h - h * p[1] + pointRadius);
+  }
+
   RGBA _lineColor = RGBA(0, 255, 255, 96);
   Canvas _canvas;
   DynamicEnvelope _env;
