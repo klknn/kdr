@@ -75,6 +75,7 @@ class ClientImpl : Client {
 
   this() {
     // env = mallocNew!DynamicEnvelope();
+    logInfo("Initialize kdr-envtool.");
   }
 
   override PluginInfo buildPluginInfo() {
