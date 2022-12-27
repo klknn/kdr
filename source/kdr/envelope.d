@@ -241,7 +241,7 @@ struct Envelope {
         return i;
       }
     }
-    return length;
+    return length - 1;
   }
 
   /// Lagrange interpolation.

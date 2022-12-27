@@ -111,23 +111,41 @@ class EnvelopeUI : UIElement, IParameterListener {
     return Click.startDrag;
   }
 
-  /+
   override void onMouseDrag(int x, int y, int dx, int dy, MouseState mstate) {
-    if (_dragPoint == -1) return;
+    if (_dragPoint == -1) return; // But no point is selected.
 
     vec2f newp = position2point(x, y);  // is already clamped to [0, 1].
-    if (_dragPoint == 0 || _dragPoint + 1 == _env.length) {
+
+    if (_dragPoint == 0 || _dragPoint + 1 == Envelope.MAX_POINTS) {
       // As bias, only y is changed.
-      _env[0].y = newp.y;
-      _env[$-1].y = newp.y;
+      LinearFloatParameter bias = envelopeBiasParam(_params);
+      bias.beginParamEdit();
+      bias.setFromGUI(newp.y);
+      bias.endParamEdit();
     } else {
       // Clamp not to exceed neighbours.
-      newp.x = clamp(newp.x, _env[_dragPoint - 1].x, _env[_dragPoint + 1].x);
-      _env[_dragPoint].xy = newp;
+      EnvelopePointParams point = envelopePointParamsAt(_dragPoint, _params);
+      float srcx = point.x.value;
+      float prev = 0, next = 1;
+      foreach (i; 1 .. Envelope.MAX_POINTS - 1) {
+        float px = envelopePointParamsAt(i, _params).x.value;
+        if (prev < px && px < srcx) prev = px;
+        if (srcx < px && px < next) next = px;
+      }
+      logDebug("newp.x %f, prev %f next %f", newp.x, prev, next);
+      newp.x = clamp(newp.x, prev, next);
+
+      point.x.beginParamEdit();
+      point.x.setFromGUI(newp.x);
+      point.x.endParamEdit();
+
+      point.y.beginParamEdit();
+      point.y.setFromGUI(newp.y);
+      point.y.endParamEdit();
     }
+
     setDirtyWhole();
   }
-  +/
 
   override void onAnimate(double dt, double time) nothrow @nogc {
     if (_timeDisplayError > 0.0f) {
@@ -142,9 +160,9 @@ class EnvelopeUI : UIElement, IParameterListener {
     foreach (ref rect; dirtyRects) {
       ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
       _canvas.initialize(cropped);
-      _canvas.fillStyle = _lineColor;
       _canvas.translate(-rect.min.x, -rect.min.y);
 
+      _canvas.fillStyle = _lineColor;
       foreach (p; env) {
         _canvas.fillCircle(point2position(p), pointRadius);
       }
@@ -164,26 +182,6 @@ class EnvelopeUI : UIElement, IParameterListener {
   }
 
   // Account for param changes.
-
-  override void onBeginDrag() {
-    foreach (Parameter p; _params) p.beginParamEdit();
-    setDirtyWhole();
-  }
-
-  override void onStopDrag() {
-    foreach (Parameter p; _params) p.endParamEdit();
-    setDirtyWhole();
-  }
-
-  override void onMouseEnter() {
-    foreach (Parameter p; _params) p.beginParamHover();
-    setDirtyWhole();
-  }
-
-  override void onMouseExit() {
-    foreach (Parameter p; _params) p.endParamHover();
-    setDirtyWhole();
-  }
 
   override void onParameterChanged(Parameter sender) {
     setDirtyWhole();
