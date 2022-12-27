@@ -166,7 +166,7 @@ unittest {
 
 
 /// Dynamically adjustable envelope shaper.
-struct DynamicEnvelope {
+class Envelope {
  public:
   @nogc nothrow:
 
@@ -240,16 +240,16 @@ struct DynamicEnvelope {
   // float[N + 1] interp;  // Interporation point between ys[i-1] and ys[i].
 }
 
-@nogc nothrow pure @safe
+nothrow pure @safe
 unittest {
-  DynamicEnvelope env;
+  Envelope env = new Envelope;
 
   // Initial start/end points.
   assert(env.getY(0.0) == 0.0);
   assert(env.getY(1.0) == 0.0);
-  assert(env[0] == DynamicEnvelope.Point(0, 0));
-  assert(env[1] == DynamicEnvelope.Point(1, 0));
-  assert(env[$-1] == DynamicEnvelope.Point(1, 0));
+  assert(env[0] == vec2f(0, 0));
+  assert(env[1] == vec2f(1, 0));
+  assert(env[$-1] == vec2f(1, 0));
 
   // Check interp.
   assert(env.getY(0.25) == 0.0);
@@ -258,7 +258,7 @@ unittest {
   // Add a new point.
   assert(env.add(0.5, 1.0));
   assert(env.getY(0.5) == 1.0);
-  assert(env[1] == DynamicEnvelope.Point(0.5, 1.0));
+  assert(env[1] == vec2f(0.5, 1.0));
   assert(env.length == 3);
 
   // The added point changes the interp.
@@ -266,6 +266,6 @@ unittest {
   assert(env.getY(0.75) == 0.5);
 
   // Update the existing point.
-  env[1] = DynamicEnvelope.Point(0, 0);
-  assert(env[1] == DynamicEnvelope.Point(0, 0));
+  env[1] = vec2f(0, 0);
+  assert(env[1] == vec2f(0, 0));
 }

@@ -14,10 +14,16 @@ class EnvToolClient : Client {
   /// Ctor.
   this() {
     logInfo("Initialize %s", __FUNCTION__.ptr);
+
+    _env = mallocNew!Envelope;
+    _env.add(0.25, 1.0);
+    _env.add(0.50, 0.5);
+    _env.add(0.75, 0.5);
+
   }
 
   override IGraphics createGraphics() {
-    if (!_gui) _gui = mallocNew!EnvToolGUI;
+    if (!_gui) _gui = mallocNew!EnvToolGUI(_env);
     return _gui;
   }
 
@@ -37,6 +43,6 @@ class EnvToolClient : Client {
   }
 
 private:
-  DynamicEnvelope env;
+  Envelope _env;
   EnvToolGUI _gui;
 }
