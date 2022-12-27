@@ -4,6 +4,7 @@ import std.algorithm.comparison : clamp;
 import std.math : isClose;
 
 import dplug.core : mallocNew;
+import dplug.client;
 import dplug.math : vec2f, box2f, box2i, rectangle;
 import dplug.gui : Click, flagRaw, flagAnimated, makeSizeConstraintsFixed,
   makeSizeConstraintsDiscrete, MouseState, GUIGraphics, UIContext, UIElement;
@@ -13,6 +14,7 @@ import dplug.flatwidgets : UIWindowResizer;
 import dplug.pbrwidgets : PBRBackgroundGUI;
 
 import kdr.envelope : Envelope;
+import kdr.envtool.params;
 import kdr.logging : logDebug, logInfo;
 
 private enum png1 = "114.png"; // "gray.png"; // "black.png"
@@ -20,16 +22,20 @@ private enum png2 = "black.png";
 private enum png3 = "black.png";
 
 /// UI for displaying/tweaking kdr.envelope.Envelope.
-class EnvelopeUI : UIElement {
+class EnvelopeUI : UIElement, IParameterListener {
  public:
   @nogc nothrow:
 
   /// Ctor.
-  this(UIContext context, Envelope env) {
+  this(UIContext context, Parameter[] params) {
     logDebug("Initialize %s", __FUNCTION__.ptr);
     super(context, flagRaw | flagAnimated);
-    _env = env;
+    _params = params;
+    foreach (Parameter p; _params) p.addListener(this);
   }
+
+  /// Dtor.
+  ~this() { foreach (Parameter p; _params) p.removeListener(this); }
 
   override Click onMouseClick(
       int x, int y, int button, bool isDoubleClick, MouseState mstate) {
@@ -37,8 +43,18 @@ class EnvelopeUI : UIElement {
     setDirtyWhole();
 
     _dragPoint = -1;
-    foreach (i, p; _env) {
-      vec2f center = point2position(p);
+    float bias = envelopeBiasParam(_params).value;
+    foreach (i; 0 .. Envelope.MAX_POINTS) {
+      vec2f centerPoint;
+      if (i == 0 || i + 1 == Envelope.MAX_POINTS) {
+        centerPoint = vec2f(i == 0 ? 0 : 1, bias);
+      } else {
+        EnvelopePointParams point = envelopePointParamsAt(i, _params);
+        if (!point.enabled.value) continue;
+        centerPoint = vec2f(point.x.value, point.y.value);
+      }
+
+      vec2f center = point2position(centerPoint);
       box2f circleBox = box2f(center - pointRadius, center + pointRadius);
       if (circleBox.contains(x, y)) {
         _dragPoint = cast(int) i;
@@ -48,32 +64,54 @@ class EnvelopeUI : UIElement {
     }
 
     if (isDoubleClick) {
-      if (_dragPoint != -1) {  // Found.
-        if (_env[_dragPoint].isCurve) {
-          _env.del(_dragPoint);
+      if (_dragPoint != -1 && _dragPoint != 0 && _dragPoint + 1!= Envelope.MAX_POINTS) {
+        // Found but not begin/end.
+        EnvelopePointParams point = envelopePointParamsAt(_dragPoint, _params);
+        if (point.curve.value) {
+          point.enabled.beginParamEdit();
+          point.enabled.setFromGUI(false);
+          point.enabled.endParamEdit();
         } else {
-          _env[_dragPoint].isCurve = true;
+          point.curve.beginParamEdit();
+          point.curve.setFromGUI(true);
+          point.curve.endParamEdit();
         }
-      } else {  // Not found.
-        _env.add(Envelope.Point(position2point(x, y)));
+      } else {
+        // If not found, add a new point.
+        foreach (i; 1 .. Envelope.MAX_POINTS - 1) {
+          EnvelopePointParams point = envelopePointParamsAt(i, _params);
+          // Find a disabled point.
+          if (!point.enabled.value) {
+            // Add the position.
+            vec2f p = position2point(x, y);
+            point.enabled.beginParamEdit();
+            point.enabled.setFromGUI(true);
+            point.enabled.endParamEdit();
+
+            point.x.beginParamEdit();
+            point.x.setFromGUI(p.x);
+            point.x.endParamEdit();
+
+            point.y.beginParamEdit();
+            point.y.setFromGUI(p.y);
+            point.y.endParamEdit();
+
+            point.curve.beginParamEdit();
+            point.curve.setFromGUI(false);
+            point.curve.endParamEdit();
+
+            break;
+          }
+        }
       }
       _dragPoint = -1;
       return Click.handled;
     }
 
-    // if (mstate.leftButtonDown) {
-    //   return Click.startDrag;
-    // }
-    if (mstate.rightButtonDown) {
-      logDebug("right-clicked %d-th point", _dragPoint);
-      Envelope.Point p = _env[_dragPoint];
-      p.isCurve = !p.isCurve;
-      _env[_dragPoint] = p;
-      return Click.handled;
-    }
     return Click.startDrag;
   }
 
+  /+
   override void onMouseDrag(int x, int y, int dx, int dy, MouseState mstate) {
     if (_dragPoint == -1) return;
 
@@ -89,6 +127,7 @@ class EnvelopeUI : UIElement {
     }
     setDirtyWhole();
   }
+  +/
 
   override void onAnimate(double dt, double time) nothrow @nogc {
     if (_timeDisplayError > 0.0f) {
@@ -99,13 +138,14 @@ class EnvelopeUI : UIElement {
   }
 
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
+    Envelope env = buildEnvelope(_params);
     foreach (ref rect; dirtyRects) {
       ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
       _canvas.initialize(cropped);
       _canvas.fillStyle = _lineColor;
       _canvas.translate(-rect.min.x, -rect.min.y);
 
-      foreach (p; _env) {
+      foreach (p; env) {
         _canvas.fillCircle(point2position(p), pointRadius);
       }
 
@@ -115,7 +155,7 @@ class EnvelopeUI : UIElement {
       enum numLine = 1000;
       foreach (float n; 0 .. numLine) {
         float x = n / numLine;
-        float y = _env.getY(x);
+        float y = env.getY(x);
         _canvas.lineTo(point2position(vec2f(x, y)));
       }
       _canvas.lineTo(point2position(vec2f(1, 0)));
@@ -126,20 +166,36 @@ class EnvelopeUI : UIElement {
   // Account for param changes.
 
   override void onBeginDrag() {
+    foreach (Parameter p; _params) p.beginParamEdit();
     setDirtyWhole();
   }
 
   override void onStopDrag() {
+    foreach (Parameter p; _params) p.endParamEdit();
     setDirtyWhole();
   }
 
   override void onMouseEnter() {
+    foreach (Parameter p; _params) p.beginParamHover();
     setDirtyWhole();
   }
 
   override void onMouseExit() {
+    foreach (Parameter p; _params) p.endParamHover();
     setDirtyWhole();
   }
+
+  override void onParameterChanged(Parameter sender) {
+    setDirtyWhole();
+  }
+
+  override void onBeginParameterEdit(Parameter sender) {}
+
+  override void onEndParameterEdit(Parameter sender) {}
+
+  override void onBeginParameterHover(Parameter sender) {}
+
+  override void onEndParameterHover(Parameter sender) {}
 
  private:
   float pointRadius() { return position.width * _circleRadiusRatio; }
@@ -160,9 +216,9 @@ class EnvelopeUI : UIElement {
 
   // States.
   Canvas _canvas;
-  Envelope _env;
   float _timeDisplayError = 0;
   int _dragPoint = -1;
+  Parameter[] _params;
 
   // Settings.
   enum RGBA _lineColor = RGBA(0, 255, 255, 96);
@@ -172,8 +228,7 @@ class EnvelopeUI : UIElement {
 unittest {
   GUIGraphics gui = new GUIGraphics(makeSizeConstraintsFixed(200, 100),
                                     flagRaw | flagAnimated);
-  Envelope env = new Envelope;
-  EnvelopeUI ui = new EnvelopeUI(gui.context, env);
+  EnvelopeUI ui = new EnvelopeUI(gui.context, []);
   ui.position = rectangle(0, 0, 200, 100);
 
   vec2f pos = ui.point2position(vec2f(0.1, 0.2));
@@ -186,14 +241,14 @@ unittest {
 class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
  public:
   @nogc nothrow:
-  this(Envelope env) {
+  this(Parameter[] envParams) {
     logDebug("Initialize %s", __FUNCTION__.ptr);
 
     static immutable float[] ratios = [1.0f, 1.25f, 1.5f, 1.75f, 2.0f];
     super(makeSizeConstraintsDiscrete(400, 300, ratios));
 
     addChild(_resizer = mallocNew!UIWindowResizer(context()));
-    addChild(_envui = mallocNew!EnvelopeUI(context(), env));
+    addChild(_envui = mallocNew!EnvelopeUI(context(), envParams));
   }
 
   override void reflow() {

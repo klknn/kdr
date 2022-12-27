@@ -166,9 +166,11 @@ unittest {
 }
 
 /// Dynamically adjustable envelope shaper.
-class Envelope {
+struct Envelope {
  public:
   @nogc nothrow:
+
+  enum MAX_POINTS = 8;
 
   float getY(float x) const pure @safe {
     assert(0 <= x && x <= 1);
@@ -193,7 +195,7 @@ class Envelope {
     assert(0 <= p.y && p.y <= 1);
 
     // Cannot add x anymore.
-    if (length >= _N) return false;
+    if (length >= MAX_POINTS) return false;
 
     const idx = newIndex(p.x);
     foreach_reverse (i; idx .. length) {
@@ -224,7 +226,7 @@ class Envelope {
     bool isCurve;
   }
 
-  inout(Point)[] points() inout pure @safe {
+  inout(Point)[] points() inout pure @safe return {
     return _points[0 .. length];
   }
 
@@ -256,17 +258,13 @@ class Envelope {
     return clamp(y, 0, 1);
   }
 
-  enum _N = 16;
   int _length = 2;
-  Point[_N] _points = [Point(vec2f(0, 0)), Point(vec2f(1, 0))];
-  // float[_N] _xs = [0, 1];  // Sorted and normalized to [0.0 .. 1.0]
-  // float[_N] _ys = [0, 0];  // Normalized to [0.0 .. 1.0]
-  // float[N + 1] interp;  // Interporation point between ys[i-1] and ys[i].
+  Point[MAX_POINTS] _points = [Point(vec2f(0, 0)), Point(vec2f(1, 0))];
 }
 
 nothrow pure @safe
 unittest {
-  Envelope env = new Envelope;
+  Envelope env;
 
   // Initial start/end points.
   assert(env.getY(0.0) == 0.0);
