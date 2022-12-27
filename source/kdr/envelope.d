@@ -170,7 +170,7 @@ struct Envelope {
  public:
   @nogc nothrow:
 
-  enum MAX_POINTS = 8;
+  enum MAX_POINTS = 32;
 
   float getY(float x) const pure @safe {
     assert(0 <= x && x <= 1);

@@ -12,23 +12,34 @@ import kdr.envelope;
 
 /// Parameter for EnvToolClient.
 enum Params {
-  beatScale = 0,
+  beatScale,
   depth,
   stereoOffset,
-  volumeMod,
-  filterMod,
-  filterMode,
-  filterCutoff,
-  filterRes,
+  // volumeMod,
+  // filterMod,
+  // filterMode,
+  // filterCutoff,
+  // filterRes,
+  envelope,
 }
+
+immutable string[] beatScaleLabels = ["1/64", "1/48", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4"];
+immutable double[] beatScaleValues = [1./64, 1./48, 1./32, 1./24, 1./16, 1./12, 1./8, 1./6, 1./4];
+static assert(beatScaleLabels.length == beatScaleValues.length);
 
 @nogc nothrow
 Parameter[] buildEnvelopeParameters() {
   Vec!Parameter params;
 
   int n = 0;
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "bias", "", 0, 1, 0));
+  // General config.
+  params.pushBack(mallocNew!EnumParameter(n++, "beatScale", beatScaleLabels,
+                                          cast(int) beatScaleValues.length-1));
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "depth", "", 0.0, 1.0, 1.0));
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "stereoOffset", "", 0.0, 1.0, 0.0));
 
+  // Envelope config.
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "bias", "", 0, 1, 0));
   // -2 for begin/end points.
   foreach (i; 0 .. Envelope.MAX_POINTS - 2) {
     if (i == 0) {

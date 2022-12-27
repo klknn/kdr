@@ -156,21 +156,60 @@ class EnvelopeUI : UIElement, IParameterListener {
   }
 
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
+    enum RGBA lineColor = RGBA(0, 255, 255, 96);
+    enum RGBA gradColor = RGBA(0, 32, 32, 96);
+    enum RGBA gridColor = RGBA(96, 96, 96, 96);
+    enum RGBA darkColor = RGBA(128, 128, 128, 128);
+    enum RGBA lightColor = RGBA(100, 200, 200, 200);
+
     Envelope env = buildEnvelope(_params);
     foreach (ref rect; dirtyRects) {
       ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
       _canvas.initialize(cropped);
       _canvas.translate(-rect.min.x, -rect.min.y);
 
-      _canvas.fillStyle = _lineColor;
-      foreach (p; env) {
+      // Draw grid.
+      enum float gridWidth = 0.002;
+      int numGrid = 8;
+      foreach (float i; 0 .. numGrid + 1) {
+        _canvas.fillStyle = gridColor;
+        _canvas.beginPath();
+        _canvas.moveTo(point2position(vec2f(i / numGrid - gridWidth, 0)));
+        _canvas.lineTo(point2position(vec2f(i / numGrid + gridWidth, 0)));
+        _canvas.lineTo(point2position(vec2f(i / numGrid + gridWidth, 1)));
+        _canvas.lineTo(point2position(vec2f(i / numGrid - gridWidth, 1)));
+        _canvas.fill();
+
+        _canvas.beginPath();
+        _canvas.moveTo(point2position(vec2f(0, i / numGrid - gridWidth)));
+        _canvas.lineTo(point2position(vec2f(0, i / numGrid + gridWidth)));
+        _canvas.lineTo(point2position(vec2f(1, i / numGrid + gridWidth)));
+        _canvas.lineTo(point2position(vec2f(1, i / numGrid - gridWidth)));
+        _canvas.fill();
+      }
+
+      // Draw points.
+      foreach (Envelope.Point p; env) {
+        _canvas.fillStyle = p.isCurve ? darkColor : lightColor;
         _canvas.fillCircle(point2position(p), pointRadius);
       }
 
       // Draw envelope lines.
+      enum numLine = 1000;
+      _canvas.fillStyle = lineColor;
+      foreach (float n; 0 .. numLine) {
+        float x = n / numLine;
+        float y = env.getY(x);
+        _canvas.fillCircle(point2position(vec2f(x, y)), position.width * 0.003);
+      }
+
+      auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
+      grad.addColorStop(0, lineColor);
+      grad.addColorStop(position.height, gradColor);
+      _canvas.fillStyle = grad;
+
       _canvas.beginPath();
       _canvas.moveTo(point2position(vec2f(0, 0)));
-      enum numLine = 1000;
       foreach (float n; 0 .. numLine) {
         float x = n / numLine;
         float y = env.getY(x);
@@ -196,7 +235,7 @@ class EnvelopeUI : UIElement, IParameterListener {
   override void onEndParameterHover(Parameter sender) {}
 
  private:
-  float pointRadius() { return position.width * _circleRadiusRatio; }
+  float pointRadius() { return position.width / 50; }
 
   // Converts point in [0, 1] to dirty rect position in UI.
   vec2f point2position(vec2f p) {
@@ -217,10 +256,6 @@ class EnvelopeUI : UIElement, IParameterListener {
   float _timeDisplayError = 0;
   int _dragPoint = -1;
   Parameter[] _params;
-
-  // Settings.
-  enum RGBA _lineColor = RGBA(0, 255, 255, 96);
-  enum float _circleRadiusRatio = 1.0 / 50;
 }
 
 unittest {

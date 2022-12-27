@@ -1,5 +1,7 @@
 module kdr.envtool.client;
 
+import std.algorithm.comparison : clamp;
+
 import dplug.math : vec2f;
 import dplug.client : Client, IGraphics, LegalIO, LinearFloatParameter, Parameter, TimeInfo;
 import dplug.core;
@@ -17,16 +19,10 @@ class EnvToolClient : Client {
   this() {
     super();
     logInfo("Initialize %s", __FUNCTION__.ptr);
-
-    // _env.add(Envelope.Point(vec2f(0.25, 1.0)));
-    // _env.add(Envelope.Point(vec2f(0.50, 0.7), true));
-    // _env.add(Envelope.Point(vec2f(0.60, 0.6), true));
-    // _env.add(Envelope.Point(vec2f(0.75, 0.5)));
-
   }
 
   override IGraphics createGraphics() {
-    if (!_gui) _gui = mallocNew!EnvToolGUI(this.params);
+    if (!_gui) _gui = mallocNew!EnvToolGUI(params[Params.envelope .. $]);
     return _gui;
   }
 
@@ -50,13 +46,16 @@ class EnvToolClient : Client {
 
   override void processAudio(
       const(float*)[] inputs, float*[] outputs, int frames, TimeInfo info) {
-    Envelope env = buildEnvelope(params);
-    double beatScale = 1.0;
+    Envelope env = buildEnvelope(params[Params.envelope .. $]);
+    double beatScale = beatScaleValues[readParam!int(Params.beatScale)] * 4;
+    float depth = readParam!float(Params.depth);
     const double beatPerSample = info.tempo / 60 / _sampleRate;
     foreach (c; 0 .. inputs.length) {
+      float offset = c == 0 ? 0 : readParam!float(Params.stereoOffset);
       foreach (t; 0 .. frames) {
         double beats = (info.timeInSamples + t) * beatPerSample;
-        outputs[c][t] = env.getY(beats % beatScale) * inputs[c][t];
+        float e = env.getY(clamp((beats % beatScale) + offset, 0, 1));
+        outputs[c][t] = (depth * e + 1.0 - depth) * inputs[c][t];
       }
     }
   }
