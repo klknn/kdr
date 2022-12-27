@@ -116,14 +116,14 @@ unittest {
   import core.time;
 
   auto other = new Thread({
-      foreach (i; 0 .. 3) {
+      foreach (i; 0 .. 2) {
         logInfo("%d-th log from other thread %lu.", i, _thisThreadID);
-        Thread.sleep(dur!"msecs"(100));
+        Thread.sleep(dur!"msecs"(10));
       }
     }).start();
-  foreach (i; 0 .. 3) {
+  foreach (i; 0 .. 2) {
     logInfo("%d-th log from this thread %lu.", i, _thisThreadID);
-    Thread.sleep(dur!"msecs"(100));
+    Thread.sleep(dur!"msecs"(10));
   }
   other.join();
 }

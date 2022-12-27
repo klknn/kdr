@@ -70,6 +70,8 @@ d_library_with_test(
     imports = [".."],
     deps = [
         "@Dplug//:client",
+        "@Dplug//:core",
+        "@Dplug//:math",
         "@mir-core//:math",
     ],
 )

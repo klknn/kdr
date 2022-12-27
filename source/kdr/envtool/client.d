@@ -11,6 +11,7 @@ import kdr.logging;
 class EnvToolClient : Client {
   public nothrow @nogc:
 
+  /// Ctor.
   this() {
     logInfo("Initialize %s", __FUNCTION__.ptr);
   }

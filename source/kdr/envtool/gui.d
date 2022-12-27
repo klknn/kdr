@@ -1,17 +1,23 @@
 module kdr.envtool.gui;
 
-import dplug.gui.element;
-import dplug.canvas;
-import dplug.flatwidgets;
-import dplug.pbrwidgets;
+import std.algorithm.comparison : clamp;
 
-import kdr.envelope;
-import kdr.logging;
+import dplug.core : mallocNew;
+import dplug.math : vec2f, box2f, box2i, rectangle;
+import dplug.gui : Click, flagRaw, flagAnimated, makeSizeConstraintsFixed, makeSizeConstraintsDiscrete, MouseState, GUIGraphics, UIContext, UIElement;
+import dplug.graphics : cropImageRef, ImageRef, RGBA;
+import dplug.canvas : Canvas;
+import dplug.flatwidgets : UIWindowResizer;
+import dplug.pbrwidgets : PBRBackgroundGUI;
+
+import kdr.envelope : DynamicEnvelope;
+import kdr.logging : logDebug, logInfo;
 
 private enum png1 = "114.png"; // "gray.png"; // "black.png"
 private enum png2 = "black.png";
 private enum png3 = "black.png";
 
+/// UI for displaying/tweaking kdr.envelope.DynamicEnvelope.
 class EnvelopeUI : UIElement {
  public:
   @nogc nothrow:
@@ -19,25 +25,49 @@ class EnvelopeUI : UIElement {
   this(UIContext context) {
     logInfo("Initialize %s", __FUNCTION__.ptr);
     super(context, flagRaw | flagAnimated);
-    _env.setXY(0.25, 1.0);
-    _env.setXY(0.50, 0.5);
-    _env.setXY(0.75, 0.5);
+    _env.add(0.25, 1.0);
+    _env.add(0.50, 0.5);
+    _env.add(0.75, 0.5);
   }
 
   override Click onMouseClick(int x, int y, int button, bool isDoubleClick, MouseState mstate) {
     // Initiate drag
     setDirtyWhole();
 
-    int i;
-    foreach (px, py; _env.points) {
-      vec2f center = fromPoint(px, py);
+    _dragPoint = 0;
+    foreach (p; _env) {
+      vec2f center = fromPoint(p);
       box2f circleBox = box2f(center - pointRadius, center + pointRadius);
       if (circleBox.contains(x, y)) {
-        logDebug("clicked %d-th point", i);
+        logDebug("clicked %d-th point", _dragPoint);
+        break;
       }
-      ++i;
+      ++_dragPoint;
     }
     return Click.startDrag;
+  }
+
+  override void onMouseDrag(int x, int y, int dx, int dy, MouseState mstate) {
+    vec2f newp = position2point(x, y);  // is already clamped to [0, 1].
+    if (_dragPoint == 0 || _dragPoint == _env.length - 1) {
+      // As bias, only y is changed.
+      _env[0] = vec2f(0, newp.y);
+      _env[$-1] = vec2f(1.00, newp.y);
+    } else {
+      // Clamp not to exceed neighbours.
+      newp.x = clamp(newp.x, _env[_dragPoint - 1].x, _env[_dragPoint + 1].x);
+      _env[_dragPoint] = newp;
+    }
+    logDebug("drag %d-th point to %f, %f", _dragPoint, newp.x, newp.y);
+    setDirtyWhole();
+  }
+
+  override void onAnimate(double dt, double time) nothrow @nogc {
+    if (_timeDisplayError > 0.0f) {
+      _timeDisplayError = _timeDisplayError - dt;
+      if (_timeDisplayError < 0) _timeDisplayError = 0;
+      setDirtyWhole();
+    }
   }
 
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
@@ -51,33 +81,78 @@ class EnvelopeUI : UIElement {
       _canvas.fillStyle = _lineColor;
       _canvas.translate(-rect.min.x, -rect.min.y);
 
-      foreach (x, y; _env.points) {
-        _canvas.fillCircle(fromPoint(x, y), pointRadius);
+      foreach (p; _env) {
+        _canvas.fillCircle(fromPoint(p), pointRadius);
       }
 
       _canvas.beginPath();
-      _canvas.moveTo(fromPoint(0, 0));
-      foreach (x, y; _env.points) {
-        _canvas.lineTo(fromPoint(x, y));
+      _canvas.moveTo(fromPoint(vec2f(0, 0)));
+      foreach (p; _env) {
+        _canvas.lineTo(fromPoint(p));
       }
+      _canvas.lineTo(fromPoint(vec2f(1, 0)));
       _canvas.fill();
     }
+  }
+
+  // Account for param changes.
+
+  override void onBeginDrag() {
+    setDirtyWhole();
+  }
+
+  override void onStopDrag() {
+    setDirtyWhole();
+  }
+
+  override void onMouseEnter() {
+    setDirtyWhole();
+  }
+
+  override void onMouseExit() {
+    setDirtyWhole();
   }
 
  private:
   float pointRadius() { return position.width * _circleRadiusRatio; }
 
   // Converts point in [0, 1] to dirty rect position in UI.
-  vec2f fromPoint(float[2] p ...) {
+  vec2f fromPoint(vec2f p) {
     float w = position.width - pointRadius * 2;
     float h = position.height- pointRadius * 2;
-    return vec2f(w * p[0] + pointRadius, h - h * p[1] + pointRadius);
+    return vec2f(w * p.x + pointRadius, h - h * p.y + pointRadius);
   }
 
-  RGBA _lineColor = RGBA(0, 255, 255, 96);
+  vec2f position2point(float[2] pos ...) {
+    float w = position.width - pointRadius * 2;
+    float h = position.height- pointRadius * 2;
+    return vec2f(clamp((pos[0] - pointRadius) / w, 0, 1),
+                 clamp((h - pos[1] + pointRadius) / h, 0, 1));
+  }
+
+  // States.
   Canvas _canvas;
   DynamicEnvelope _env;
+  float _timeDisplayError = 0;
+  int _dragPoint = -1;
+
+  // Settings.
+  enum RGBA _lineColor = RGBA(0, 255, 255, 96);
   enum float _circleRadiusRatio = 1.0 / 50;
+}
+
+unittest {
+  import std.math;
+  auto gui = new GUIGraphics(makeSizeConstraintsFixed(200, 100), flagRaw | flagAnimated);
+  EnvelopeUI ui = new EnvelopeUI(gui.context);
+  ui.position = rectangle(0, 0, 200, 100);
+
+  auto pos = ui.fromPoint(vec2f(0.1, 0.2));
+  logInfo("pos x %f y %f", pos.x, pos.y);
+  auto point = ui.position2point(pos.x, pos.y);
+  logInfo("point x %f y %f", point.x, point.y);
+  assert(isClose(point.x, 0.1));
+  assert(isClose(point.y, 0.2));
 }
 
 

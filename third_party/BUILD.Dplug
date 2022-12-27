@@ -11,6 +11,13 @@ d_library(
 )
 
 d_library(
+    name = "math",
+    srcs = glob(["math/dplug/math/*.d"]),
+    imports = ["math"],
+    deps = ["@intel-intrinsics//:intel-intrinsics"],
+)
+
+d_library(
     name = "client",
     srcs = glob(["client/dplug/client/*.d"]),
     imports = ["client"],

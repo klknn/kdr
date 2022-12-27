@@ -8,6 +8,7 @@ module kdr.envelope;
 
 import std.math : isNaN;
 
+import dplug.math.vector : vec2f;
 import dplug.core.math : linmap;
 import dplug.client.midi : MidiMessage;
 import mir.math.common : fastmath;
@@ -149,7 +150,7 @@ unittest {
     }
     assert(env._stage == Stage.sustain);
     env.release();
-    // foreach does not mutate `env`.
+    // foreach does not mutate `env`.N
     foreach (amp; env) {
       assert(env._stage == Stage.release);
     }
@@ -169,38 +170,62 @@ struct DynamicEnvelope {
  public:
   @nogc nothrow:
 
-  auto points() const {
-    import std.range;
-    return zip(this.xs[0 .. length], this.ys[0 .. length]);
+  alias Point = vec2f;
+
+  Point opIndex(size_t i) const pure @safe {
+    assert(i < length);
+    return Point(_xs[i], _ys[i]);
   }
 
-  float getY(float x) {
+  int opDollar(size_t pos)() const pure @safe {
+    static assert(pos == 0);
+    return length;
+  }
+
+  Point opIndexAssign(Point p, size_t i) pure @safe {
+    assert(i < length);
+    _xs[i] = p.x;
+    _ys[i] = p.y;
+    return p;
+  }
+
+  int opApply(scope int delegate(Point) @nogc nothrow dg) const {
+    import dplug.core.nogc;
+    foreach (i; 0 .. length) {
+      if (int result = dg(this[i])) return result;
+    }
+    return 0;
+  }
+
+  float getY(float x) const pure @safe {
     assert(0 <= x && x <= 1);
     const nextIdx = newIndex(x);
-    if (nextIdx == length) return ys[length - 1];
-    return linmap(x, xs[nextIdx-1], xs[nextIdx], ys[nextIdx-1], ys[nextIdx]);
+    if (nextIdx == length) return _ys[length - 1];
+    return linmap(x, _xs[nextIdx-1], _xs[nextIdx], _ys[nextIdx-1], _ys[nextIdx]);
   }
 
-  bool setXY(float x, float y) {
+  bool add(float x, float y) pure @safe {
     assert(0 <= x && x <= 1);
     assert(0 <= y && y <= 1);
 
     // Cannot add x anymore.
-    if (length >= N) return false;
+    if (length >= _N) return false;
 
     const idx = newIndex(x);
-    xs[idx + 1 .. length + 1] = xs[idx .. length];
-    ys[idx + 1 .. length + 1] = ys[idx .. length];
-    xs[idx] = x;
-    ys[idx] = y;
-    ++length;
+    _xs[idx + 1 .. length + 1] = _xs[idx .. length];
+    _ys[idx + 1 .. length + 1] = _ys[idx .. length];
+    _xs[idx] = x;
+    _ys[idx] = y;
+    ++_length;
     return true;
   }
 
+  int length() const pure @safe { return _length; }
+
  private:
   // Returns a new index if newx will be added to xs.
-  size_t newIndex(float newx) pure const {
-    foreach (i, x; xs[0 .. length]) {
+  size_t newIndex(float newx) const pure @safe {
+    foreach (i, x; _xs[0 .. length]) {
       if (newx < x) {
         return i;
       }
@@ -208,30 +233,39 @@ struct DynamicEnvelope {
     return length;
   }
 
-  enum N = 8;
-  int length = 2;
-  float[N] xs = [0, 1];  // Sorted and normalized to [0.0 .. 1.0]
-  float[N] ys = [0, 0];  // Normalized to [0.0 .. 1.0]
+  enum _N = 8;
+  int _length = 2;
+  float[_N] _xs = [0, 1];  // Sorted and normalized to [0.0 .. 1.0]
+  float[_N] _ys = [0, 0];  // Normalized to [0.0 .. 1.0]
   // float[N + 1] interp;  // Interporation point between ys[i-1] and ys[i].
 }
 
+@nogc nothrow pure @safe
 unittest {
   DynamicEnvelope env;
-  logInfo("newIndex %d", env.newIndex(1.0));
-  logInfo("Y %f", env.getY(1.0));
+
   // Initial start/end points.
   assert(env.getY(0.0) == 0.0);
   assert(env.getY(1.0) == 0.0);
+  assert(env[0] == DynamicEnvelope.Point(0, 0));
+  assert(env[1] == DynamicEnvelope.Point(1, 0));
+  assert(env[$-1] == DynamicEnvelope.Point(1, 0));
 
   // Check interp.
   assert(env.getY(0.25) == 0.0);
   assert(env.getY(0.75) == 0.0);
 
   // Add a new point.
-  assert(env.setXY(0.5, 1.0));
+  assert(env.add(0.5, 1.0));
   assert(env.getY(0.5) == 1.0);
+  assert(env[1] == DynamicEnvelope.Point(0.5, 1.0));
+  assert(env.length == 3);
 
   // The added point changes the interp.
   assert(env.getY(0.25) == 0.5);
   assert(env.getY(0.75) == 0.5);
+
+  // Update the existing point.
+  env[1] = DynamicEnvelope.Point(0, 0);
+  assert(env[1] == DynamicEnvelope.Point(0, 0));
 }
