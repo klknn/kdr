@@ -19,7 +19,7 @@ private enum png1 = "114.png"; // "gray.png"; // "black.png"
 private enum png2 = "black.png";
 private enum png3 = "black.png";
 
-/// UI for displaying/tweaking kdr.envelope.DynamicEnvelope.
+/// UI for displaying/tweaking kdr.envelope.Envelope.
 class EnvelopeUI : UIElement {
  public:
   @nogc nothrow:
@@ -52,14 +52,13 @@ class EnvelopeUI : UIElement {
     vec2f newp = position2point(x, y);  // is already clamped to [0, 1].
     if (_dragPoint == 0 || _dragPoint + 1 == _env.length) {
       // As bias, only y is changed.
-      _env[0] = vec2f(0, newp.y);
-      _env[$-1] = vec2f(1.00, newp.y);
+      _env[0].y = newp.y;
+      _env[$-1].y = newp.y;
     } else {
       // Clamp not to exceed neighbours.
       newp.x = clamp(newp.x, _env[_dragPoint - 1].x, _env[_dragPoint + 1].x);
-      _env[_dragPoint] = newp;
+      _env[_dragPoint].xy = newp;
     }
-    logDebug("drag %d-th point to %f, %f", _dragPoint, newp.x, newp.y);
     setDirtyWhole();
   }
 
@@ -82,10 +81,14 @@ class EnvelopeUI : UIElement {
         _canvas.fillCircle(point2position(p), pointRadius);
       }
 
+      // Draw envelope lines.
       _canvas.beginPath();
       _canvas.moveTo(point2position(vec2f(0, 0)));
-      foreach (p; _env) {
-        _canvas.lineTo(point2position(p));
+      enum numLine = 1000;
+      foreach (float n; 0 .. numLine) {
+        float x = n / numLine;
+        float y = _env.getY(x);
+        _canvas.lineTo(point2position(vec2f(x, y)));
       }
       _canvas.lineTo(point2position(vec2f(1, 0)));
       _canvas.fill();

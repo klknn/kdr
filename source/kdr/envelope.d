@@ -170,38 +170,13 @@ class Envelope {
  public:
   @nogc nothrow:
 
-  alias Point = vec2f;
-
-  Point opIndex(size_t i) const pure @safe {
-    assert(i < length);
-    return Point(_xs[i], _ys[i]);
-  }
-
-  int opDollar(size_t pos)() const pure @safe {
-    static assert(pos == 0);
-    return length;
-  }
-
-  Point opIndexAssign(Point p, size_t i) pure @safe {
-    assert(i < length);
-    _xs[i] = p.x;
-    _ys[i] = p.y;
-    return p;
-  }
-
-  int opApply(scope int delegate(Point) @nogc nothrow dg) const {
-    import dplug.core.nogc;
-    foreach (i; 0 .. length) {
-      if (int result = dg(this[i])) return result;
-    }
-    return 0;
-  }
-
   float getY(float x) const pure @safe {
     assert(0 <= x && x <= 1);
     const nextIdx = newIndex(x);
-    if (nextIdx == length) return _ys[length - 1];
-    return linmap(x, _xs[nextIdx-1], _xs[nextIdx], _ys[nextIdx-1], _ys[nextIdx]);
+    if (nextIdx == length) return _points[length - 1].y;
+    Point prev = _points[nextIdx - 1];
+    Point next = _points[nextIdx];
+    return linmap(x, prev.x, next.x, prev.y, next.y);
   }
 
   bool add(float x, float y) pure @safe {
@@ -212,21 +187,37 @@ class Envelope {
     if (length >= _N) return false;
 
     const idx = newIndex(x);
-    _xs[idx + 1 .. length + 1] = _xs[idx .. length];
-    _ys[idx + 1 .. length + 1] = _ys[idx .. length];
-    _xs[idx] = x;
-    _ys[idx] = y;
+    _points[idx + 1 .. length + 1] = _points[idx .. length];
+    _points[idx] = Point(vec2f(x, y));
     ++_length;
     return true;
   }
 
   int length() const pure @safe { return _length; }
 
+  struct Point {
+    vec2f xy;
+    alias xy this;
+
+    enum Kind {
+      edge,
+      curve,
+    }
+    Kind kind;
+  }
+
+  inout(Point)[] points() inout pure @safe {
+    return _points[0 .. length];
+  }
+
+  /// For array-like (opIndex etc) overloading.
+  alias points this;
+
  private:
   // Returns a new index if newx will be added to xs.
   size_t newIndex(float newx) const pure @safe {
-    foreach (i, x; _xs[0 .. length]) {
-      if (newx < x) {
+    foreach (i, p; _points[0 .. length]) {
+      if (newx < p.x) {
         return i;
       }
     }
@@ -235,8 +226,9 @@ class Envelope {
 
   enum _N = 8;
   int _length = 2;
-  float[_N] _xs = [0, 1];  // Sorted and normalized to [0.0 .. 1.0]
-  float[_N] _ys = [0, 0];  // Normalized to [0.0 .. 1.0]
+  Point[_N] _points = [Point(vec2f(0, 0)), Point(vec2f(1, 0))];
+  // float[_N] _xs = [0, 1];  // Sorted and normalized to [0.0 .. 1.0]
+  // float[_N] _ys = [0, 0];  // Normalized to [0.0 .. 1.0]
   // float[N + 1] interp;  // Interporation point between ys[i-1] and ys[i].
 }
 
@@ -266,6 +258,6 @@ unittest {
   assert(env.getY(0.75) == 0.5);
 
   // Update the existing point.
-  env[1] = vec2f(0, 0);
+  env[1] = Envelope.Point(vec2f(0, 0));
   assert(env[1] == vec2f(0, 0));
 }
