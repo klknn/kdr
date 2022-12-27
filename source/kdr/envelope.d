@@ -6,6 +6,7 @@
 */
 module kdr.envelope;
 
+import std.algorithm : clamp;
 import std.math : isNaN;
 
 import dplug.math.vector : vec2f;
@@ -198,7 +199,6 @@ class Envelope {
     foreach_reverse (i; idx .. length) {
       _points[i + 1] = _points[i];
     }
-    // _points[idx + 1 .. length + 1] = _points[idx .. length];
     _points[idx] = p;
     ++_length;
     return true;
@@ -210,7 +210,6 @@ class Envelope {
     foreach (j; i .. length) {
       _points[j] = _points[j + 1];
     }
-    // _points[i .. length-1] = _points[i + 1 .. length];
     --_length;
     return true;
   }
@@ -254,7 +253,7 @@ class Envelope {
       }
       y += p.y * lx;
     }
-    return y;
+    return clamp(y, 0, 1);
   }
 
   enum _N = 16;

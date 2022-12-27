@@ -48,12 +48,16 @@ class EnvelopeUI : UIElement {
     }
 
     if (isDoubleClick) {
-      if (_dragPoint != -1) {
-        _env.del(_dragPoint);
-        _dragPoint = -1;
-      } else {
+      if (_dragPoint != -1) {  // Found.
+        if (_env[_dragPoint].isCurve) {
+          _env.del(_dragPoint);
+        } else {
+          _env[_dragPoint].isCurve = true;
+        }
+      } else {  // Not found.
         _env.add(Envelope.Point(position2point(x, y)));
       }
+      _dragPoint = -1;
       return Click.handled;
     }
 
