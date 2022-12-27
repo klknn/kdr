@@ -31,24 +31,48 @@ class EnvelopeUI : UIElement {
     _env = env;
   }
 
-  override Click onMouseClick(int x, int y, int button, bool isDoubleClick, MouseState mstate) {
+  override Click onMouseClick(
+      int x, int y, int button, bool isDoubleClick, MouseState mstate) {
     // Initiate drag
     setDirtyWhole();
 
-    _dragPoint = 0;
-    foreach (p; _env) {
+    _dragPoint = -1;
+    foreach (i, p; _env) {
       vec2f center = point2position(p);
       box2f circleBox = box2f(center - pointRadius, center + pointRadius);
       if (circleBox.contains(x, y)) {
+        _dragPoint = cast(int) i;
         logDebug("clicked %d-th point", _dragPoint);
         break;
       }
-      ++_dragPoint;
+    }
+
+    if (isDoubleClick) {
+      if (_dragPoint != -1) {
+        _env.del(_dragPoint);
+        _dragPoint = -1;
+      } else {
+        _env.add(Envelope.Point(position2point(x, y)));
+      }
+      return Click.handled;
+    }
+
+    // if (mstate.leftButtonDown) {
+    //   return Click.startDrag;
+    // }
+    if (mstate.rightButtonDown) {
+      logDebug("right-clicked %d-th point", _dragPoint);
+      Envelope.Point p = _env[_dragPoint];
+      p.isCurve = !p.isCurve;
+      _env[_dragPoint] = p;
+      return Click.handled;
     }
     return Click.startDrag;
   }
 
   override void onMouseDrag(int x, int y, int dx, int dy, MouseState mstate) {
+    if (_dragPoint == -1) return;
+
     vec2f newp = position2point(x, y);  // is already clamped to [0, 1].
     if (_dragPoint == 0 || _dragPoint + 1 == _env.length) {
       // As bias, only y is changed.

@@ -164,7 +164,6 @@ unittest {
   }
 }
 
-
 /// Dynamically adjustable envelope shaper.
 class Envelope {
  public:
@@ -172,38 +171,58 @@ class Envelope {
 
   float getY(float x) const pure @safe {
     assert(0 <= x && x <= 1);
-    const nextIdx = newIndex(x);
+    size_t nextIdx = newIndex(x);
     if (nextIdx == length) return _points[length - 1].y;
-    Point prev = _points[nextIdx - 1];
-    Point next = _points[nextIdx];
-    return linmap(x, prev.x, next.x, prev.y, next.y);
+
+    size_t prevIdx = nextIdx - 1;
+    Point prev = this[prevIdx];
+    Point next = this[nextIdx];
+    if (!prev.isCurve && !next.isCurve) {
+      return linmap(x, prev.x, next.x, prev.y, next.y);
+    }
+
+    // ???
+    while (this[prevIdx].isCurve) --prevIdx;
+    while (this[nextIdx].isCurve) ++nextIdx;
+    return interpolate(x, this[prevIdx .. nextIdx + 1]);
   }
 
-  bool add(float x, float y) pure @safe {
-    assert(0 <= x && x <= 1);
-    assert(0 <= y && y <= 1);
+  bool add(Point p) pure @safe {
+    assert(0 <= p.x && p.x <= 1);
+    assert(0 <= p.y && p.y <= 1);
 
     // Cannot add x anymore.
     if (length >= _N) return false;
 
-    const idx = newIndex(x);
-    _points[idx + 1 .. length + 1] = _points[idx .. length];
-    _points[idx] = Point(vec2f(x, y));
+    const idx = newIndex(p.x);
+    foreach_reverse (i; idx .. length) {
+      _points[i + 1] = _points[i];
+    }
+    // _points[idx + 1 .. length + 1] = _points[idx .. length];
+    _points[idx] = p;
     ++_length;
+    return true;
+  }
+
+  bool del(int i) pure @safe {
+    if (i <= 0 || length <= i) return false;
+
+    foreach (j; i .. length) {
+      _points[j] = _points[j + 1];
+    }
+    // _points[i .. length-1] = _points[i + 1 .. length];
+    --_length;
     return true;
   }
 
   int length() const pure @safe { return _length; }
 
+  /// Value of evelope points.
   struct Point {
+    @nogc nothrow pure @safe:
     vec2f xy;
     alias xy this;
-
-    enum Kind {
-      edge,
-      curve,
-    }
-    Kind kind;
+    bool isCurve;
   }
 
   inout(Point)[] points() inout pure @safe {
@@ -214,7 +233,7 @@ class Envelope {
   alias points this;
 
  private:
-  // Returns a new index if newx will be added to xs.
+  /// Returns a new index if newx will be added to xs.
   size_t newIndex(float newx) const pure @safe {
     foreach (i, p; _points[0 .. length]) {
       if (newx < p.x) {
@@ -224,7 +243,21 @@ class Envelope {
     return length;
   }
 
-  enum _N = 8;
+  /// Lagrange interpolation.
+  float interpolate(float x, const Point[] ps) const pure @safe {
+    float y = 0;
+    foreach (i, p; ps) {
+      float lx = 1;
+      foreach (j, q; ps)  {
+        if (i == j) continue;
+        lx *= (x - q.x) / (p.x - q.x);
+      }
+      y += p.y * lx;
+    }
+    return y;
+  }
+
+  enum _N = 16;
   int _length = 2;
   Point[_N] _points = [Point(vec2f(0, 0)), Point(vec2f(1, 0))];
   // float[_N] _xs = [0, 1];  // Sorted and normalized to [0.0 .. 1.0]
@@ -248,7 +281,7 @@ unittest {
   assert(env.getY(0.75) == 0.0);
 
   // Add a new point.
-  assert(env.add(0.5, 1.0));
+  assert(env.add(Envelope.Point(vec2f(0.5, 1.0))));
   assert(env.getY(0.5) == 1.0);
   assert(env[1] == vec2f(0.5, 1.0));
   assert(env.length == 3);
@@ -260,4 +293,7 @@ unittest {
   // Update the existing point.
   env[1] = Envelope.Point(vec2f(0, 0));
   assert(env[1] == vec2f(0, 0));
+
+  assert(env.del(1));
+  assert(env.length == 2);
 }
