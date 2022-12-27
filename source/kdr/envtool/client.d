@@ -37,7 +37,9 @@ class EnvToolClient : Client {
     return io.releaseData();
   }
 
-  override int maxFramesInProcess() { return 32; }
+  override int maxFramesInProcess() {
+    return 32;
+  }
 
   override void reset(
       double sampleRate, int maxFrames, int numInputs, int numOutputs) {
@@ -54,7 +56,7 @@ class EnvToolClient : Client {
       float offset = c == 0 ? 0 : readParam!float(Params.stereoOffset);
       foreach (t; 0 .. frames) {
         const double beats = (info.timeInSamples + t) * beatPerSample;
-        const float e = env.getY(clamp((beats % beatScale) + offset, 0, 1));
+        const float e = env.getY((beats / beatScale + offset) % 1.0);
         outputs[c][t] = (depth * e + 1.0 - depth) * inputs[c][t];
       }
     }
