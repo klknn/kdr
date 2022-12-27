@@ -37,12 +37,22 @@ class EnvToolClient : Client {
   override int maxFramesInProcess() { return 32; }
 
   override void reset(double sampleRate, int maxFrames, int numInputs, int numOutputs) {
+    _sampleRate = sampleRate;
   }
 
   override void processAudio(const(float*)[] inputs, float*[] outputs, int frames, TimeInfo info) {
+    double beatScale = 1.0;
+    const double beatPerSample = info.tempo / 60 / _sampleRate;
+    foreach (c; 0 .. inputs.length) {
+      foreach (t; 0 .. frames) {
+        double beats = (info.timeInSamples + t) * beatPerSample;
+        outputs[c][t] = _env.getY(beats % beatScale) * inputs[c][t];
+      }
+    }
   }
 
-private:
+ private:
   Envelope _env;
   EnvToolGUI _gui;
+  double _sampleRate;
 }
