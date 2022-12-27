@@ -6,10 +6,6 @@ import dplug.client;
 
 import kdr.envelope;
 
-// import kdr.params : RegisterBuilder;
-
-// @RegisterBuilder
-
 /// Parameter for EnvToolClient.
 enum Params {
   beatScale,
@@ -105,13 +101,14 @@ EnvelopePointParams envelopePointParamsAt(int i, Parameter[] params) {
 @nogc nothrow
 Envelope buildEnvelope(Parameter[] params) {
   Envelope ret;
-  const LinearFloatParameter bias = envelopeBiasParam(params);
+
+  LinearFloatParameter bias = envelopeBiasParam(params);
   ret[0].y = bias.value;
   ret[$-1].y = bias.value;
 
   // 1 .. $-1 for skipping begin/end points.
   foreach (i; 1 .. Envelope.MAX_POINTS - 1) {
-    const EnvelopePointParams point = envelopePointParamsAt(i, params);
+    EnvelopePointParams point = envelopePointParamsAt(i, params);
     if (point.enabled.value) {
       ret.add(Envelope.Point(vec2f(point.x.value, point.y.value), point.curve.value));
     }
