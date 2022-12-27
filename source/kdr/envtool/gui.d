@@ -195,21 +195,13 @@ class EnvelopeUI : UIElement, IParameterListener {
       }
 
       // Draw envelope lines.
-      enum numLine = 1000;
-      _canvas.fillStyle = lineColor;
-      foreach (float n; 0 .. numLine) {
-        const float x = n / numLine;
-        const float y = env.getY(x);
-        _canvas.fillCircle(point2position(vec2f(x, y)), position.width * 0.003);
-      }
-
       auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
       grad.addColorStop(0, lineColor);
       grad.addColorStop(position.height, gradColor);
       _canvas.fillStyle = grad;
-
       _canvas.beginPath();
       _canvas.moveTo(point2position(vec2f(0, 0)));
+      enum numLine = 1000;
       foreach (float n; 0 .. numLine) {
         const float x = n / numLine;
         const float y = env.getY(x);
