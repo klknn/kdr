@@ -234,7 +234,8 @@ struct Envelope {
   alias points this;
 
  private:
-  /// Returns a new index if newx will be added to xs.
+  /// Params: newx = new x value to be added to points.
+  /// Returns: a new index if newx will be added to xs.
   size_t newIndex(float newx) const pure @safe {
     foreach (i, p; _points[0 .. length]) {
       if (newx < p.x) {
@@ -244,7 +245,7 @@ struct Envelope {
     return length - 1;
   }
 
-  /// Lagrange interpolation.
+  // Lagrange interpolation.
   float interpolate(float x, const Point[] ps) const pure @safe {
     float y = 0;
     foreach (i, p; ps) {

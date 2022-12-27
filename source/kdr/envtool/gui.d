@@ -125,10 +125,10 @@ class EnvelopeUI : UIElement, IParameterListener {
     } else {
       // Clamp not to exceed neighbours.
       EnvelopePointParams point = envelopePointParamsAt(_dragPoint, _params);
-      float srcx = point.x.value;
+      const float srcx = point.x.value;
       float prev = 0, next = 1;
       foreach (i; 1 .. Envelope.MAX_POINTS - 1) {
-        float px = envelopePointParamsAt(i, _params).x.value;
+        const float px = envelopePointParamsAt(i, _params).x.value;
         if (prev < px && px < srcx) prev = px;
         if (srcx < px && px < next) next = px;
       }
@@ -198,8 +198,8 @@ class EnvelopeUI : UIElement, IParameterListener {
       enum numLine = 1000;
       _canvas.fillStyle = lineColor;
       foreach (float n; 0 .. numLine) {
-        float x = n / numLine;
-        float y = env.getY(x);
+        const float x = n / numLine;
+        const float y = env.getY(x);
         _canvas.fillCircle(point2position(vec2f(x, y)), position.width * 0.003);
       }
 
@@ -211,8 +211,8 @@ class EnvelopeUI : UIElement, IParameterListener {
       _canvas.beginPath();
       _canvas.moveTo(point2position(vec2f(0, 0)));
       foreach (float n; 0 .. numLine) {
-        float x = n / numLine;
-        float y = env.getY(x);
+        const float x = n / numLine;
+        const float y = env.getY(x);
         _canvas.lineTo(point2position(vec2f(x, y)));
       }
       _canvas.lineTo(point2position(vec2f(1, 0)));

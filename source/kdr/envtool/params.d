@@ -23,10 +23,14 @@ enum Params {
   envelope,
 }
 
+/// Used by the "beatScale" param.
 immutable string[] beatScaleLabels = ["1/64", "1/48", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4"];
+/// ditto.
 immutable double[] beatScaleValues = [1./64, 1./48, 1./32, 1./24, 1./16, 1./12, 1./8, 1./6, 1./4];
 static assert(beatScaleLabels.length == beatScaleValues.length);
 
+/// Returns:
+///   Envelope parameters.
 @nogc nothrow
 Parameter[] buildEnvelopeParameters() {
   Vec!Parameter params;
@@ -57,17 +61,30 @@ Parameter[] buildEnvelopeParameters() {
   return params.releaseData();
 }
 
+/// Params:
+///   params = type-erased parameters.
+/// Returns:
+///   a bias parameter of envelope.
 @nogc nothrow
 LinearFloatParameter envelopeBiasParam(Parameter[] params) {
   return cast(LinearFloatParameter) params[0];
 }
 
+/// Value represents envelope point parameters. See also kdr.envelope.Envelope.Point.
 struct EnvelopePointParams {
+  ///
   BoolParameter enabled;
+  ///
   LinearFloatParameter x, y;
+  ///
   BoolParameter curve;
 }
 
+/// Params:
+///   i = index of querying envelope point.
+///   params = type-erased parameters, which starts with the bias parameter.
+/// Returns:
+///   EnvelopePointParams at the given index i in mixed params.
 @nogc nothrow
 EnvelopePointParams envelopePointParamsAt(int i, Parameter[] params) {
   assert(i > 0);
@@ -81,16 +98,20 @@ EnvelopePointParams envelopePointParamsAt(int i, Parameter[] params) {
   return EnvelopePointParams(enabled, x, y, curve);
 }
 
+/// Params:
+///   params = type-erased parameters, which starts with the bias parameter.
+/// Returns:
+///   Instantiated Envelope object.
 @nogc nothrow
 Envelope buildEnvelope(Parameter[] params) {
   Envelope ret;
-  LinearFloatParameter bias = envelopeBiasParam(params);
+  const LinearFloatParameter bias = envelopeBiasParam(params);
   ret[0].y = bias.value;
   ret[$-1].y = bias.value;
 
   // 1 .. $-1 for skipping begin/end points.
   foreach (i; 1 .. Envelope.MAX_POINTS - 1) {
-    EnvelopePointParams point = envelopePointParamsAt(i, params);
+    const EnvelopePointParams point = envelopePointParamsAt(i, params);
     if (point.enabled.value) {
       ret.add(Envelope.Point(vec2f(point.x.value, point.y.value), point.curve.value));
     }
