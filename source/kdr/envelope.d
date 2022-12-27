@@ -6,8 +6,11 @@
 */
 module kdr.envelope;
 
+import std.algorithm : clamp;
 import std.math : isNaN;
 
+import dplug.math.vector : vec2f;
+import dplug.core.math : linmap;
 import dplug.client.midi : MidiMessage;
 import mir.math.common : fastmath;
 
@@ -148,7 +151,7 @@ unittest {
     }
     assert(env._stage == Stage.sustain);
     env.release();
-    // foreach does not mutate `env`.
+    // foreach does not mutate `env`.N
     foreach (amp; env) {
       assert(env._stage == Stage.release);
     }
@@ -160,4 +163,135 @@ unittest {
     assert(env.empty);
     assert(env.front == 0);
   }
+}
+
+/// Dynamically adjustable envelope shaper.
+struct Envelope {
+ public:
+  @nogc nothrow:
+
+  enum MAX_POINTS = 32;
+
+  float getY(float x) const pure @safe {
+    assert(0 <= x && x <= 1);
+    size_t nextIdx = newIndex(x);
+    if (nextIdx == length) return _points[length - 1].y;
+
+    size_t prevIdx = nextIdx - 1;
+    Point prev = this[prevIdx];
+    Point next = this[nextIdx];
+    if (!prev.isCurve && !next.isCurve) {
+      return linmap(x, prev.x, next.x, prev.y, next.y);
+    }
+
+    // ???
+    while (this[prevIdx].isCurve) --prevIdx;
+    while (this[nextIdx].isCurve) ++nextIdx;
+    return interpolate(x, this[prevIdx .. nextIdx + 1]);
+  }
+
+  bool add(Point p) pure @safe {
+    assert(0 <= p.x && p.x <= 1);
+    assert(0 <= p.y && p.y <= 1);
+
+    // Cannot add x anymore.
+    if (length >= MAX_POINTS) return false;
+
+    const idx = newIndex(p.x);
+    foreach_reverse (i; idx .. length) {
+      _points[i + 1] = _points[i];
+    }
+    _points[idx] = p;
+    ++_length;
+    return true;
+  }
+
+  bool del(int i) pure @safe {
+    if (i <= 0 || length <= i) return false;
+
+    foreach (j; i .. length) {
+      _points[j] = _points[j + 1];
+    }
+    --_length;
+    return true;
+  }
+
+  int length() const pure @safe { return _length; }
+
+  /// Value of evelope points.
+  struct Point {
+    @nogc nothrow pure @safe:
+    vec2f xy;
+    alias xy this;
+    bool isCurve;
+  }
+
+  inout(Point)[] points() inout pure @safe return {
+    return _points[0 .. length];
+  }
+
+  /// For array-like (opIndex etc) overloading.
+  alias points this;
+
+ private:
+  /// Params: newx = new x value to be added to points.
+  /// Returns: a new index if newx will be added to xs.
+  size_t newIndex(float newx) const pure @safe {
+    foreach (i, p; _points[0 .. length]) {
+      if (newx < p.x) {
+        return i;
+      }
+    }
+    return length - 1;
+  }
+
+  // Lagrange interpolation.
+  float interpolate(float x, const Point[] ps) const pure @safe {
+    float y = 0;
+    foreach (i, p; ps) {
+      float lx = 1;
+      foreach (j, q; ps)  {
+        if (i == j) continue;
+        lx *= (x - q.x) / (p.x - q.x);
+      }
+      y += p.y * lx;
+    }
+    return clamp(y, 0, 1);
+  }
+
+  int _length = 2;
+  Point[MAX_POINTS] _points = [Point(vec2f(0, 0)), Point(vec2f(1, 0))];
+}
+
+nothrow pure @safe
+unittest {
+  Envelope env;
+
+  // Initial start/end points.
+  assert(env.getY(0.0) == 0.0);
+  assert(env.getY(1.0) == 0.0);
+  assert(env[0] == vec2f(0, 0));
+  assert(env[1] == vec2f(1, 0));
+  assert(env[$-1] == vec2f(1, 0));
+
+  // Check interp.
+  assert(env.getY(0.25) == 0.0);
+  assert(env.getY(0.75) == 0.0);
+
+  // Add a new point.
+  assert(env.add(Envelope.Point(vec2f(0.5, 1.0))));
+  assert(env.getY(0.5) == 1.0);
+  assert(env[1] == vec2f(0.5, 1.0));
+  assert(env.length == 3);
+
+  // The added point changes the interp.
+  assert(env.getY(0.25) == 0.5);
+  assert(env.getY(0.75) == 0.5);
+
+  // Update the existing point.
+  env[1] = Envelope.Point(vec2f(0, 0));
+  assert(env[1] == vec2f(0, 0));
+
+  assert(env.del(1));
+  assert(env.length == 2);
 }

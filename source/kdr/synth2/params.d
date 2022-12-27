@@ -6,8 +6,6 @@
 */
 module kdr.synth2.params;
 
-import std.traits : EnumMembers;
-
 import dplug.core.nogc : destroyFree, mallocNew;
 import dplug.client.params : BoolParameter, EnumParameter, GainParameter,
   IntegerParameter, LinearFloatParameter, LogFloatParameter;

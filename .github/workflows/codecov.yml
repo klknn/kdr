@@ -40,8 +40,9 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
 
-    - name: D-Scanner
-      run: dub fetch dscanner && dub run dscanner -- --styleCheck source bin
+    # Disabled for false alarms on const, and bugs in its module exclusion.
+    # - name: D-Scanner
+    #   run: dub fetch dscanner && dub run dscanner -- --styleCheck source bin
 
     - name: Test
       run: |
