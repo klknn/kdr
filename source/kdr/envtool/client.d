@@ -22,7 +22,7 @@ class EnvToolClient : Client {
   }
 
   override IGraphics createGraphics() {
-    if (!_gui) _gui = mallocNew!EnvToolGUI(params[Params.envelope .. $]);
+    if (!_gui) _gui = mallocNew!EnvToolGUI(params);
     return _gui;
   }
 
@@ -49,7 +49,7 @@ class EnvToolClient : Client {
   override void processAudio(
       const(float*)[] inputs, float*[] outputs, int frames, TimeInfo info) {
     const Envelope env = buildEnvelope(params[Params.envelope .. $]);
-    const double beatScale = beatScaleValues[readParam!int(Params.beatScale)] * 4;
+    const double beatScale = rateValues[readParam!int(Params.rate)] * 4;
     const float depth = readParam!float(Params.depth);
     const double beatPerSample = info.tempo / 60 / _sampleRate;
     foreach (c; 0 .. inputs.length) {

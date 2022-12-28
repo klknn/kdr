@@ -11,7 +11,7 @@ import dplug.gui : Click, flagRaw, flagAnimated, makeSizeConstraintsFixed,
 import dplug.graphics : cropImageRef, ImageRef, RGBA;
 import dplug.canvas : Canvas;
 import dplug.flatwidgets : UIWindowResizer;
-import dplug.pbrwidgets : PBRBackgroundGUI;
+import dplug.pbrwidgets; // : PBRBackgroundGUI;
 
 import kdr.envelope : Envelope;
 import kdr.envtool.params;
@@ -20,6 +20,15 @@ import kdr.logging : logDebug, logInfo;
 private enum png1 = "114.png"; // "gray.png"; // "black.png"
 private enum png2 = "black.png";
 private enum png3 = "black.png";
+
+enum RGBA lineColor = RGBA(0, 255, 255, 96);
+enum RGBA gradColor = RGBA(0, 32, 32, 96);
+enum RGBA gridColor = RGBA(96, 96, 96, 96);
+enum RGBA darkColor = RGBA(128, 128, 128, 128);
+enum RGBA lightColor = RGBA(100, 200, 200, 200);
+enum RGBA textColor = RGBA(155, 255, 255, 0);
+enum RGBA litColor = RGBA(155, 255, 255, 0);
+enum RGBA unlitColor = RGBA(0, 32, 32, 0);
 
 /// UI for displaying/tweaking kdr.envelope.Envelope.
 class EnvelopeUI : UIElement, IParameterListener {
@@ -156,12 +165,6 @@ class EnvelopeUI : UIElement, IParameterListener {
   }
 
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
-    enum RGBA lineColor = RGBA(0, 255, 255, 96);
-    enum RGBA gradColor = RGBA(0, 32, 32, 96);
-    enum RGBA gridColor = RGBA(96, 96, 96, 96);
-    enum RGBA darkColor = RGBA(128, 128, 128, 128);
-    enum RGBA lightColor = RGBA(100, 200, 200, 200);
-
     Envelope env = buildEnvelope(_params);
     foreach (ref rect; dirtyRects) {
       ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
@@ -266,14 +269,30 @@ unittest {
 class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
  public:
   @nogc nothrow:
-  this(Parameter[] envParams) {
+  this(Parameter[] params) {
     logDebug("Initialize %s", __FUNCTION__.ptr);
 
     static immutable float[] ratios = [1.0f, 1.25f, 1.5f, 1.75f, 2.0f];
-    super(makeSizeConstraintsDiscrete(400, 300, ratios));
+    super(makeSizeConstraintsDiscrete(500, 300, ratios));
+
+    _params = params;
+    _font = mallocNew!Font(cast(ubyte[]) import("FORCED SQUARE.ttf"));
+
+    _title = buildLabel("kdr envtool");
+    _date = buildLabel("build: " ~ __DATE__ ~ "");
 
     addChild(_resizer = mallocNew!UIWindowResizer(context()));
-    addChild(_envui = mallocNew!EnvelopeUI(context(), envParams));
+    addChild(_envui = mallocNew!EnvelopeUI(
+        context(), params[Params.envelope .. $]));
+
+    _rateKnob = buildKnob(Params.rate);
+    _rateLabel = buildLabel("rate");
+
+    _depthKnob = buildKnob(Params.depth);
+    _depthLabel = buildLabel("depth");
+
+    _stereoOffsetKnob = buildKnob(Params.stereoOffset);
+    _stereoOffsetLabel = buildLabel("offset");
   }
 
   override void reflow() {
@@ -281,13 +300,79 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
     const int W = position.width;
     const int H = position.height;
 
-    enum hintSize = 10;
+    // Main.
+    _envui.position = rectangle(0, 0, cast(int) (W * 0.8), cast(int) (H * 0.9));
+
+    _title.position = rectangle(0, _envui.position.max.y, _envui.position.width / 2,
+                                cast(int) (H * 0.1));
+    _title.textSize = _title.position.height * 2;
+
+    _date.position = rectangle(_title.position.max.x,
+                               _title.position.min.y + _title.position.height / 2,
+                               _envui.position.width - _title.position.width,
+                               _title.position.height / 2);
+    _title.textSize = _title.textSize / 2;
+
+    // Knobs.
+    int knobSize = cast(int) (W * 0.15);
+    int knobX = cast(int) (W * 0.825);
+    int labelSize = knobSize / 4;
+    int labelMargin = labelSize / 4;
+
+    _rateKnob.position = rectangle(
+        knobX, cast(int) (H * 0.025), knobSize, knobSize);
+    _rateLabel.textSize = labelSize;
+    _rateLabel.position = rectangle(
+        knobX, _rateKnob.position.max.y, knobSize, labelSize);
+
+    _depthKnob.position = rectangle(
+        knobX, _rateLabel.position.max.y, knobSize, knobSize);
+    _depthLabel.textSize = labelSize;
+    _depthLabel.position = rectangle(
+        knobX,  _depthKnob.position.max.y, knobSize, labelSize);
+
+    _stereoOffsetKnob.position = rectangle(
+        knobX, _depthLabel.position.max.y, knobSize, knobSize);
+    _stereoOffsetLabel.textSize = labelSize;
+    _stereoOffsetLabel.position = rectangle(
+        knobX, _stereoOffsetKnob.position.max.y, knobSize, labelSize);
+
+    int hintSize = 10;
     _resizer.position = rectangle(W - hintSize, H - hintSize,
                                   hintSize, hintSize);
-    _envui.position = rectangle(0, 0, W - hintSize, H - hintSize);
   }
 
  private:
+  UIKnob buildKnob(Params pid) {
+    UIKnob knob;
+    addChild(knob = mallocNew!UIKnob(this.context, _params[pid]));
+    knob.knobRadius = 0.65f;
+    knob.knobDiffuse = gridColor; // color of knob
+    // NOTE: material [R(smooth), G(metal), B(shiny), A(phisycal)]
+    knob.knobMaterial = RGBA(255, 0, 0, 0);
+    knob.numLEDs = 0;
+    knob.litTrailDiffuse = litColor;
+    knob.unlitTrailDiffuse = unlitColor;
+    knob.trailRadiusMin = 0.1;
+    knob.trailRadiusMax = 0.8;
+    return knob;
+  }
+
+  UILabel buildLabel(string text) {
+    UILabel label;
+    addChild(label = mallocNew!UILabel(this.context, _font, text));
+    label.textColor = textColor;
+    return label;
+  }
+
+  Font _font;
+  UILabel _title, _date;
+  Parameter[] _params;
   UIWindowResizer _resizer;
   EnvelopeUI _envui;
+  UIKnob _rateKnob, _depthKnob, _stereoOffsetKnob;
+  UILabel _rateLabel, _depthLabel, _stereoOffsetLabel;
+
+  enum litTrailDiffuse = RGBA(151, 119, 255, 100);
+  enum unlitTrailDiffuse = RGBA(81, 54, 108, 0);
 }
