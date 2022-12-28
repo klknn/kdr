@@ -23,10 +23,12 @@ private enum png3 = "black.png";
 
 enum RGBA lineColor = RGBA(0, 255, 255, 96);
 enum RGBA gradColor = RGBA(0, 32, 32, 96);
-enum RGBA gridColor = RGBA(96, 96, 96, 96);
+enum RGBA gridColor = RGBA(100, 200, 200, 32);
+// enum RGBA gridColor = RGBA(64, 64, 64, 64);
 enum RGBA darkColor = RGBA(128, 128, 128, 128);
 enum RGBA lightColor = RGBA(100, 200, 200, 200);
 enum RGBA textColor = RGBA(155, 255, 255, 0);
+enum RGBA knobColor = RGBA(96, 96, 96, 96);
 enum RGBA litColor = RGBA(155, 255, 255, 0);
 enum RGBA unlitColor = RGBA(0, 32, 32, 0);
 
@@ -141,7 +143,6 @@ class EnvelopeUI : UIElement, IParameterListener {
         if (prev < px && px < srcx) prev = px;
         if (srcx < px && px < next) next = px;
       }
-      logDebug("newp.x %f, prev %f next %f", newp.x, prev, next);
       newp.x = clamp(newp.x, prev, next);
 
       point.x.beginParamEdit();
@@ -172,7 +173,7 @@ class EnvelopeUI : UIElement, IParameterListener {
       _canvas.translate(-rect.min.x, -rect.min.y);
 
       // Draw grid.
-      enum float gridWidth = 0.002;
+      enum float gridWidth = 0.0015;
       int numGrid = 8;
       foreach (float i; 0 .. numGrid + 1) {
         _canvas.fillStyle = gridColor;
@@ -305,13 +306,13 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
 
     _title.position = rectangle(0, _envui.position.max.y, _envui.position.width / 2,
                                 cast(int) (H * 0.1));
-    _title.textSize = _title.position.height * 2;
+    _title.textSize = _title.position.height;
 
     _date.position = rectangle(_title.position.max.x,
                                _title.position.min.y + _title.position.height / 2,
                                _envui.position.width - _title.position.width,
                                _title.position.height / 2);
-    _title.textSize = _title.textSize / 2;
+    _date.textSize = _title.textSize / 2;
 
     // Knobs.
     int knobSize = cast(int) (W * 0.15);
@@ -347,7 +348,7 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
     UIKnob knob;
     addChild(knob = mallocNew!UIKnob(this.context, _params[pid]));
     knob.knobRadius = 0.65f;
-    knob.knobDiffuse = gridColor; // color of knob
+    knob.knobDiffuse = knobColor;
     // NOTE: material [R(smooth), G(metal), B(shiny), A(phisycal)]
     knob.knobMaterial = RGBA(255, 0, 0, 0);
     knob.numLEDs = 0;
