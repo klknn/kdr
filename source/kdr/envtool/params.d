@@ -8,7 +8,7 @@ import kdr.envelope;
 
 /// Parameter for EnvToolClient.
 enum Params {
-  beatScale,
+  rate,
   depth,
   stereoOffset,
   // volumeMod,
@@ -19,11 +19,11 @@ enum Params {
   envelope,
 }
 
-/// Used by the "beatScale" param.
-immutable string[] beatScaleLabels = ["1/64", "1/48", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1/1", "2/1", "4/1", "8/1"];
+/// Used by the "rate" param.
+immutable string[] rateLabels = ["1/64", "1/48", "1/32", "1/24", "1/16", "1/12", "1/8", "1/6", "1/4", "1/3", "1/2", "1/1", "2/1", "4/1", "8/1"];
 /// ditto.
-immutable double[] beatScaleValues = [1./64, 1./48, 1./32, 1./24, 1./16, 1./12, 1./8, 1./6, 1./4, 1./3., 1./2, 1., 2., 4., 8.];
-static assert(beatScaleLabels.length == beatScaleValues.length);
+immutable double[] rateValues = [1./64, 1./48, 1./32, 1./24, 1./16, 1./12, 1./8, 1./6, 1./4, 1./3., 1./2, 1., 2., 4., 8.];
+static assert(rateLabels.length == rateValues.length);
 
 /// Returns:
 ///   Envelope parameters.
@@ -33,9 +33,9 @@ Parameter[] buildEnvelopeParameters() {
 
   int n = 0;
   // General config.
-  params.pushBack(mallocNew!EnumParameter(n++, "beatScale", beatScaleLabels, 8));
+  params.pushBack(mallocNew!EnumParameter(n++, "rate", rateLabels, 8));
   params.pushBack(mallocNew!LinearFloatParameter(n++, "depth", "", 0.0, 1.0, 1.0));
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "stereoOffset", "", 0.0, 0.5, 0.0));
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "stereoOffset", "", -1, 1, 0.0));
 
   // Envelope config.
   params.pushBack(mallocNew!LinearFloatParameter(n++, "bias", "", 0, 1, 0));
