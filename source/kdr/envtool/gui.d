@@ -283,8 +283,7 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
     _date = buildLabel("build: " ~ __DATE__ ~ "");
 
     addChild(_resizer = mallocNew!UIWindowResizer(context()));
-    addChild(_envui = mallocNew!EnvelopeUI(
-        context(), params[Params.envelope .. $]));
+    addChild(_envui = mallocNew!EnvelopeUI(context(), params));
 
     _rateKnob = buildKnob(Params.rate);
     _rateLabel = buildLabel("rate");
@@ -376,4 +375,10 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
 
   enum litTrailDiffuse = RGBA(151, 119, 255, 100);
   enum unlitTrailDiffuse = RGBA(81, 54, 108, 0);
+}
+
+unittest {
+  Parameter[] ps = buildEnvelopeParameters();
+  auto gui = new EnvToolGUI(ps);
+  gui.reflow();
 }

@@ -48,7 +48,7 @@ class EnvToolClient : Client {
 
   override void processAudio(
       const(float*)[] inputs, float*[] outputs, int frames, TimeInfo info) {
-    const Envelope env = buildEnvelope(params[Params.envelope .. $]);
+    const Envelope env = buildEnvelope(params);
     const double beatScale = rateValues[readParam!int(Params.rate)] * 4;
     const float depth = readParam!float(Params.depth);
     const double beatPerSample = info.tempo / 60 / _sampleRate;
