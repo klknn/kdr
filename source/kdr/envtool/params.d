@@ -8,6 +8,8 @@ import kdr.envelope;
 
 /// Parameter for EnvToolClient.
 enum Params {
+  envelope,
+  bias = 4 * (Envelope.MAX_POINTS - 2),  // -2 as begin/end uses bias.
   rate,
   depth,
   stereoOffset,
@@ -16,7 +18,6 @@ enum Params {
   // filterMode,
   // filterCutoff,
   // filterRes,
-  envelope,
 }
 
 /// Used by the "rate" param.
@@ -32,13 +33,7 @@ Parameter[] buildEnvelopeParameters() {
   Vec!Parameter params;
 
   int n = 0;
-  // General config.
-  params.pushBack(mallocNew!EnumParameter(n++, "rate", rateLabels, 8));
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "depth", "", 0.0, 1.0, 1.0));
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "stereoOffset", "", -1, 1, 0.0));
-
   // Envelope config.
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "bias", "", 0, 1, 0));
   // -2 for begin/end points.
   foreach (i; 0 .. Envelope.MAX_POINTS - 2) {
     if (i == 0) {
@@ -53,6 +48,17 @@ Parameter[] buildEnvelopeParameters() {
     params.pushBack(mallocNew!LinearFloatParameter(n++, "y", "", 0, 1, 0));
     params.pushBack(mallocNew!BoolParameter(n++, "curve", false));
   }
+  assert(n == Params.bias);
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "bias", "", 0, 1, 0));
+
+  // General config.
+  assert(n == Params.rate);
+  params.pushBack(mallocNew!EnumParameter(n++, "rate", rateLabels, 8));
+  assert(n == Params.depth);
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "depth", "", 0.0, 1.0, 1.0));
+  assert(n == Params.stereoOffset);
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "stereoOffset", "", -1, 1, 0.0));
+
   return params.releaseData();
 }
 
@@ -62,7 +68,7 @@ Parameter[] buildEnvelopeParameters() {
 ///   a bias parameter of envelope.
 @nogc nothrow
 LinearFloatParameter envelopeBiasParam(Parameter[] params) {
-  return cast(LinearFloatParameter) params[0];
+  return cast(LinearFloatParameter) params[Params.bias];
 }
 
 /// Value represents envelope point parameters. See also kdr.envelope.Envelope.Point.
@@ -84,8 +90,7 @@ struct EnvelopePointParams {
 EnvelopePointParams envelopePointParamsAt(int i, Parameter[] params) {
   assert(i > 0);
   assert(i + 1 < Envelope.MAX_POINTS);
-  // +1 for bias.
-  int n = 1 + (i - 1) * 4; // cast(int) EnvelopePointParams.tupleof.length;
+  int n = (i - 1) * 4; // cast(int) EnvelopePointParams.tupleof.length;
   BoolParameter enabled = cast(BoolParameter) params[n++];
   LinearFloatParameter x = cast(LinearFloatParameter) params[n++];
   LinearFloatParameter y = cast(LinearFloatParameter) params[n++];
