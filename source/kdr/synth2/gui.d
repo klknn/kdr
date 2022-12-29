@@ -11,15 +11,14 @@ import std.algorithm : max;
 
 import dplug.client.params : BoolParameter, FloatParameter, IntegerParameter, Parameter, IParameterListener;
 import dplug.core : mallocNew, makeVec, destroyFree, Vec;
-import dplug.graphics.color : RGBA;
-import dplug.graphics.font : Font;
+import dplug.graphics : Font, RGBA, L16, OwnedImage, toRef;
 import dplug.gui : UIElement;
 import dplug.flatwidgets : makeSizeConstraintsDiscrete, UIWindowResizer;
-import dplug.pbrwidgets : PBRBackgroundGUI, UILabel, UIOnOffSwitch, UIKnob, UISlider, KnobStyle, HandleStyle;
+import dplug.pbrwidgets : UILabel, UIOnOffSwitch, UIKnob, UISlider, KnobStyle, HandleStyle;
 import dplug.math : box2i, rectangle;
 
 import kdr.lfo : multiplierNames, mulToFloat, Multiplier;
-import kdr.params : typedParam;
+import kdr.params : typedParam, buildParams;
 import kdr.delay : delayNames;
 import kdr.effect : effectNames;
 import kdr.filter : filterNames;
@@ -44,11 +43,6 @@ unittest {
   assert(mulNames[Multiplier.dot] == "1.5");
   assert(mulNames[Multiplier.tri] == "0.3");
 }
-
-private enum png1 = "114.png"; // "gray.png"; // "black.png"
-private enum png2 = "black.png";
-private enum png3 = "black.png";
-
 
 // https://all-free-download.com/font/download/display_free_tfb_10784.html
 // static string _fontRaw = import("TFB.ttf");
@@ -96,8 +90,6 @@ unittest {
   label.width = 1;
   assert(label.width == 1);
 }
-
-version (unittest) {} else:
 
 /// GUI class.
 class Synth2GUI : PBRSimpleGUI, IParameterListener {
@@ -781,4 +773,16 @@ private:
   UIWindowResizer _resizerHint;
   Vec!box2i _defaultRects;
   Vec!float _defaultTextSize;
+}
+
+unittest {
+  Parameter[] ps = buildParams!Params;
+  auto gui = new Synth2GUI(ps);
+  gui.reflow();
+
+  int w = 100, h = 100;
+  auto dif = new OwnedImage!RGBA(w, h);
+  auto dep = new OwnedImage!L16(w, h);
+  auto mat = new OwnedImage!RGBA(w, h);
+  gui.onDrawPBR(toRef(dif), toRef(dep), toRef(mat), [rectangle(0, 0, w, h)]);
 }

@@ -6,8 +6,9 @@ import std.math : isClose;
 import dplug.core : mallocNew;
 import dplug.client;
 import dplug.math : vec2f, box2f, box2i, rectangle;
-import dplug.gui : Click, flagRaw, flagAnimated, Font, makeSizeConstraintsFixed,
-  makeSizeConstraintsDiscrete, MouseState, GUIGraphics, UIContext, UIElement;
+import dplug.gui;
+// : Click, flagRaw, flagAnimated, Font, makeSizeConstraintsFixed,
+//  makeSizeConstraintsDiscrete, MouseState, GUIGraphics, UIContext, UIElement;
 import dplug.graphics : cropImageRef, ImageRef, RGBA;
 import dplug.canvas : Canvas;
 import dplug.flatwidgets : UIWindowResizer;
@@ -377,4 +378,10 @@ unittest {
   Parameter[] ps = buildEnvelopeParameters();
   auto gui = new EnvToolGUI(ps);
   gui.reflow();
+
+  int w = 100, h = 100;
+  auto dif = new OwnedImage!RGBA(w, h);
+  auto dep = new OwnedImage!L16(w, h);
+  auto mat = new OwnedImage!RGBA(w, h);
+  gui.onDrawPBR(toRef(dif), toRef(dep), toRef(mat), [rectangle(0, 0, w, h)]);
 }

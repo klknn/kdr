@@ -10,7 +10,9 @@ class PBRSimpleGUI : GUIGraphics {
     _color = color;
   }
 
-  override void onDrawPBR(ImageRef!RGBA diffuseMap, ImageRef!L16 depthMap, ImageRef!RGBA materialMap, box2i[] dirtyRects) {
+  override void onDrawPBR(
+      ImageRef!RGBA diffuseMap, ImageRef!L16 depthMap,
+      ImageRef!RGBA materialMap, box2i[] dirtyRects) {
     foreach(dirtyRect; dirtyRects) {
       fill(diffuseMap, dirtyRect, _color);
       fill(depthMap, dirtyRect, L16(0));
@@ -28,4 +30,14 @@ class PBRSimpleGUI : GUIGraphics {
   }
 
   RGBA _color;
+}
+
+
+unittest {
+  int w = 100, h = 100;
+  auto gui = new PBRSimpleGUI(makeSizeConstraintsFixed(w, h));
+  auto dif = new OwnedImage!RGBA(w, h);
+  auto dep = new OwnedImage!L16(w, h);
+  auto mat = new OwnedImage!RGBA(w, h);
+  gui.onDrawPBR(toRef(dif), toRef(dep), toRef(mat), [rectangle(0, 0, w, h)]);
 }
