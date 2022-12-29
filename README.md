@@ -11,10 +11,6 @@ https://github.com/AuburnSounds/Dplug/wiki/Getting-Started
 
 virtual-analog synth like [synth1](https://www.kvraudio.com/product/synth1-by-daichi-laboratory-ichiro-toda) in D.
 
-WARNING: this plugin is very unstable.
-
-![gui](resource/screen.png)
-
 Features (TODO)
 
 - [x] Multi-platform
@@ -53,11 +49,25 @@ Features (TODO)
   - [ ] Control change
   - [ ] Program change
 
+## envtool
+
+Envelope shaping effect for tremolo sidechain like kickstart or LFO tools.
+
+- [x] WYSWIG envelope edit
+- [x] Beat sync rate control
+- [x] Depth control
+- [x] LR offset control
+- [x] Volume mod
+- [ ] Filter mod
+- [ ] Pan mod
+- [ ] Presets
+
 ## reverb
 
 TBA
 
 ## History
 
+- 29 Dec 2022: Add envtool
 - 24 Sep 2022: Move from https://github.com/klknn/synth2 to https://github.com/klknn/kdr
 - 15 Feb 2021: Fork [poly-alias-synth](https://github.com/AuburnSounds/Dplug/tree/v10.2.1/examples/poly-alias-synth) for synth2.
