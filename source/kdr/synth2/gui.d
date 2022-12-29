@@ -23,6 +23,7 @@ import kdr.params : typedParam;
 import kdr.delay : delayNames;
 import kdr.effect : effectNames;
 import kdr.filter : filterNames;
+import kdr.simplegui : PBRSimpleGUI;
 import kdr.synth2.params : Params, menvDestNames, lfoDestNames, voiceKindNames, maxPoly;
 
 // TODO: CTFE formatted names from enum values.
@@ -99,7 +100,7 @@ unittest {
 version (unittest) {} else:
 
 /// GUI class.
-class Synth2GUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""), IParameterListener {
+class Synth2GUI : PBRSimpleGUI, IParameterListener {
  public:
   nothrow @nogc:
 
