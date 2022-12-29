@@ -16,6 +16,7 @@ import mir.math : approxEqual, PI, SQRT2, fmax;
 
 /// Kinds of filter implentations.
 enum FilterKind {
+  none,
   HP6,
   HP12,
   BP12,
@@ -39,6 +40,8 @@ struct Filter {
   ///   input = input wave frame.
   /// Returns: filtered wave frame.
   float apply(float input) {
+    if (kind == FilterKind.none) return input;
+
     // TODO: use ring buffer
     foreach_reverse (i; 1 .. nFIR) {
       x[i] = x[i - 1];
@@ -98,6 +101,8 @@ struct Filter {
     assert(T != float.nan);
     assert(w0 != float.nan);
     final switch (kind) {
+    case FilterKind.none:
+      return;
       mixin(import("filter_coeff.d"));
     }
   }
