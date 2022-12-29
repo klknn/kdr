@@ -6,25 +6,21 @@ import std.math : isClose;
 import dplug.core : mallocNew;
 import dplug.client;
 import dplug.math : vec2f, box2f, box2i, rectangle;
-import dplug.gui : Click, flagRaw, flagAnimated, makeSizeConstraintsFixed,
+import dplug.gui : Click, flagRaw, flagAnimated, Font, makeSizeConstraintsFixed,
   makeSizeConstraintsDiscrete, MouseState, GUIGraphics, UIContext, UIElement;
 import dplug.graphics : cropImageRef, ImageRef, RGBA;
 import dplug.canvas : Canvas;
 import dplug.flatwidgets : UIWindowResizer;
-import dplug.pbrwidgets; // : PBRBackgroundGUI;
+import dplug.pbrwidgets : UILabel, UIKnob; // : PBRBackgroundGUI;
 
 import kdr.envelope : Envelope;
 import kdr.envtool.params;
+import kdr.simplegui : PBRSimpleGUI;
 import kdr.logging : logDebug, logInfo;
-
-private enum png1 = "114.png"; // "gray.png"; // "black.png"
-private enum png2 = "black.png";
-private enum png3 = "black.png";
 
 enum RGBA lineColor = RGBA(0, 255, 255, 96);
 enum RGBA gradColor = RGBA(0, 32, 32, 96);
 enum RGBA gridColor = RGBA(100, 200, 200, 32);
-// enum RGBA gridColor = RGBA(64, 64, 64, 64);
 enum RGBA darkColor = RGBA(128, 128, 128, 128);
 enum RGBA lightColor = RGBA(100, 200, 200, 200);
 enum RGBA textColor = RGBA(155, 255, 255, 0);
@@ -267,7 +263,7 @@ unittest {
 }
 
 ///
-class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
+class EnvToolGUI : PBRSimpleGUI {
  public:
   @nogc nothrow:
   this(Parameter[] params) {
