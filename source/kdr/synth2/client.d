@@ -732,9 +732,11 @@ unittest {
   scope (exit) destroyFree(host.client);
   foreach (fkind; EnumMembers!FilterKind) {
     host.setParam!(Params.filterKind)(fkind);
-    assert(host.paramChangeOutputs!(Params.filterCutoff)(0.5));
-    if (fkind != FilterKind.HP6 && fkind != FilterKind.LP6) {
-      assert(host.paramChangeOutputs!(Params.filterQ)(0.5));
+    if (fkind != FilterKind.none) {
+      assert(host.paramChangeOutputs!(Params.filterCutoff)(0.5));
+      if (fkind != FilterKind.HP6 && fkind != FilterKind.LP6) {
+        assert(host.paramChangeOutputs!(Params.filterQ)(0.5));
+      }
     }
   }
 
