@@ -355,6 +355,7 @@ class EnvToolGUI : PBRSimpleGUI, IParameterListener {
         knobX, _stereoOffsetLabel.position.max.y, knobSize, knobSize);
     _destinationLabel.position = rectangle(
         knobX, _destinationKnob.position.max.y, knobSize, labelSize);
+    _destinationLabel.textSize = labelSize;
 
     // filter.
     knobX += knobSize;
