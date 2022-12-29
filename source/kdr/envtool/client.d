@@ -62,19 +62,25 @@ class EnvToolClient : Client {
     const fkind = readParam!FilterKind(Params.filterKind);
     const fcutoff = readParam!float(Params.filterCutoff);
     const fres = readParam!float(Params.filterRes);
+    foreach (ref f; _filter) f.setParams(fkind, fcutoff, fres);
 
     foreach (c; 0 .. inputs.length) {
       float offset = c == 0 ? 0 : readParam!float(Params.stereoOffset);
       foreach (t; 0 .. frames) {
         const double beats = (info.timeInSamples + t) * beatPerSample;
         float e = env.getY((beats / beatScale + offset) % 1.0);
-        e = depth * e + 1.0 - depth;
         if (dst == Destination.volume) {
           outputs[c][t] = e * inputs[c][t];
-        } else if (dst == Destination.filterCutoff) {
+        } else if (dst == Destination.cutoff) {
           _filter[c].setParams(fkind, e * fcutoff, fres);
-          outputs[c][t] = _filter[c].apply(inputs[c][t]);
+          outputs[c][t] = inputs[c][t];
+        } else if (dst == Destination.pan) {
+          float pan = c == 0 ? e : 1.0 - e;
+          outputs[c][t] = pan * inputs[c][t];
         }
+        outputs[c][t] = _filter[c].apply(outputs[c][t]);
+        // mix dry and wet signals.
+        outputs[c][t] = depth * outputs[c][t] + (1.0 - depth) * inputs[c][t];
       }
     }
   }

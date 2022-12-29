@@ -11,7 +11,7 @@ import kdr.filter;
 enum Destination {
   volume,
   pan,
-  filterCutoff,
+  cutoff,
 }
 
 /// String names of destinations.
@@ -74,9 +74,9 @@ Parameter[] buildEnvelopeParameters() {
   assert(n == Params.filterKind);
   params.pushBack(mallocNew!EnumParameter(n++, "filterKind", filterNames, FilterKind.none));
   assert(n == Params.filterCutoff);
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "filterCutoff", "",  0, 1, 0.5));
+  params.pushBack(mallocNew!LogFloatParameter(n++, "filterCutoff", "",  0.01, 1, 1));
   assert(n == Params.filterRes);
-  params.pushBack(mallocNew!LinearFloatParameter(n++, "filterRes", "",  0, 1, 0.5));
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "filterRes", "",  0, 1, 0));
 
   return params.releaseData();
 }
