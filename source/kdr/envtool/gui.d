@@ -267,7 +267,9 @@ unittest {
 }
 
 ///
-class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
+class EnvToolGUI :
+  PBRBackgroundGUI!(png1, png2, png3, png3, png3, ""),
+  IParameterListener {
  public:
   @nogc nothrow:
   this(Parameter[] params) {
@@ -287,6 +289,7 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
 
     _rateKnob = buildKnob(Params.rate);
     _rateLabel = buildLabel("rate");
+    _params[Params.rate].addListener(this);
 
     _depthKnob = buildKnob(Params.depth);
     _depthLabel = buildLabel("depth");
@@ -341,6 +344,24 @@ class EnvToolGUI : PBRBackgroundGUI!(png1, png2, png3, png3, png3, "") {
     _resizer.position = rectangle(W - hintSize, H - hintSize,
                                   hintSize, hintSize);
   }
+
+  override void onParameterChanged(Parameter sender) {
+    if (sender.index == Params.rate) {
+      logDebug("rate changed");
+      if (EnumParameter rate = cast(EnumParameter) sender) {
+        logDebug("rate casted");
+        _rateLabel.text(rateLabels[rate.value]);
+      }
+    }
+  }
+
+  override void onBeginParameterEdit(Parameter sender) {}
+
+  override void onEndParameterEdit(Parameter sender) {}
+
+  override void onBeginParameterHover(Parameter sender) {}
+
+  override void onEndParameterHover(Parameter sender) {}
 
  private:
   UIKnob buildKnob(Params pid) {
