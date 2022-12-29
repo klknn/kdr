@@ -16,14 +16,15 @@ import dplug.pbrwidgets : UILabel, UIKnob; // : PBRBackgroundGUI;
 
 import kdr.envelope : Envelope;
 import kdr.envtool.params;
+import kdr.filter : filterNames;
 import kdr.simplegui : PBRSimpleGUI;
 import kdr.logging : logDebug, logInfo;
 
 enum RGBA lineColor = RGBA(0, 255, 255, 96);
-enum RGBA gradColor = RGBA(0, 32, 32, 96);
+enum RGBA gradColor = RGBA(0, 64, 64, 96);
 enum RGBA gridColor = RGBA(100, 200, 200, 32);
 enum RGBA darkColor = RGBA(128, 128, 128, 128);
-enum RGBA lightColor = RGBA(100, 200, 200, 200);
+enum RGBA lightColor = RGBA(100, 200, 200, 100);
 enum RGBA textColor = RGBA(155, 255, 255, 0);
 enum RGBA knobColor = RGBA(96, 96, 96, 96);
 enum RGBA litColor = RGBA(155, 255, 255, 0);
@@ -169,6 +170,10 @@ class EnvelopeUI : UIElement, IParameterListener {
       _canvas.initialize(cropped);
       _canvas.translate(-rect.min.x, -rect.min.y);
 
+      // Draw background.
+      _canvas.fillStyle =  RGBA(0, 32, 32, 200);
+      _canvas.fillRect(0, 0, position.width, position.height);
+
       // Draw grid.
       enum float gridWidth = 0.0015;
       int numGrid = 8;
@@ -264,14 +269,14 @@ unittest {
 }
 
 ///
-class EnvToolGUI : PBRSimpleGUI {
+class EnvToolGUI : PBRSimpleGUI, IParameterListener {
  public:
   @nogc nothrow:
   this(Parameter[] params) {
     logDebug("Initialize %s", __FUNCTION__.ptr);
 
     static immutable float[] ratios = [1.0f, 1.25f, 1.5f, 1.75f, 2.0f];
-    super(makeSizeConstraintsDiscrete(500, 300, ratios));
+    super(makeSizeConstraintsDiscrete(600, 400, ratios));
 
     _params = params;
     _font = mallocNew!Font(cast(ubyte[]) import("FORCED SQUARE.ttf"));
@@ -282,14 +287,31 @@ class EnvToolGUI : PBRSimpleGUI {
     addChild(_resizer = mallocNew!UIWindowResizer(context()));
     addChild(_envui = mallocNew!EnvelopeUI(context(), params));
 
+    // General knobs and labels.
     _rateKnob = buildKnob(Params.rate);
     _rateLabel = buildLabel("rate");
+    _params[Params.rate].addListener(this);
 
     _depthKnob = buildKnob(Params.depth);
     _depthLabel = buildLabel("depth");
 
     _stereoOffsetKnob = buildKnob(Params.stereoOffset);
     _stereoOffsetLabel = buildLabel("offset");
+
+    _destinationKnob = buildKnob(Params.destination);
+    _destinationLabel = buildLabel("dst");
+    _params[Params.destination].addListener(this);
+
+    // Filter knobs and labels.
+    _filterKindKnob = buildKnob(Params.filterKind);
+    _filterKindLabel = buildLabel("filter");
+    _params[Params.filterKind].addListener(this);
+
+    _filterCutoffKnob = buildKnob(Params.filterCutoff);
+    _filterCutoffLabel = buildLabel("cutoff");
+
+    _filterResKnob = buildKnob(Params.filterRes);
+    _filterResLabel = buildLabel("q");
   }
 
   ~this() {
@@ -301,27 +323,18 @@ class EnvToolGUI : PBRSimpleGUI {
     const int W = position.width;
     const int H = position.height;
 
-    // Main.
-    _envui.position = rectangle(0, 0, cast(int) (W * 0.8), cast(int) (H * 0.9));
+    // Main. 70%
+    _envui.position = rectangle(0, 0, cast(int) (W * 0.7), cast(int) (H * 0.9));
 
-    _title.position = rectangle(0, _envui.position.max.y, _envui.position.width / 2,
-                                cast(int) (H * 0.1));
-    _title.textSize = _title.position.height;
-
-    _date.position = rectangle(_title.position.max.x,
-                               _title.position.min.y + _title.position.height / 2,
-                               _envui.position.width - _title.position.width,
-                               _title.position.height / 2);
-    _date.textSize = _title.textSize / 2;
-
-    // Knobs.
-    int knobSize = cast(int) (W * 0.15);
-    int knobX = cast(int) (W * 0.825);
-    int labelSize = knobSize / 4;
-    int labelMargin = labelSize / 4;
+    // Knobs. 40%
+    float knobAndLabel = H / 4.0;
+    int knobSize = cast(int) (knobAndLabel * 0.8);
+    int knobX = cast(int) (W * 0.725);
+    int labelSize = cast(int) (knobAndLabel * 0.17);
+    int labelMargin = cast(int) (knobAndLabel * 0.03);
 
     _rateKnob.position = rectangle(
-        knobX, cast(int) (H * 0.025), knobSize, knobSize);
+        knobX, labelMargin, knobSize, knobSize);
     _rateLabel.textSize = labelSize;
     _rateLabel.position = rectangle(
         knobX, _rateKnob.position.max.y, knobSize, labelSize);
@@ -338,10 +351,73 @@ class EnvToolGUI : PBRSimpleGUI {
     _stereoOffsetLabel.position = rectangle(
         knobX, _stereoOffsetKnob.position.max.y, knobSize, labelSize);
 
-    int hintSize = 10;
+    _destinationKnob.position = rectangle(
+        knobX, _stereoOffsetLabel.position.max.y, knobSize, knobSize);
+    _destinationLabel.position = rectangle(
+        knobX, _destinationKnob.position.max.y, knobSize, labelSize);
+    _destinationLabel.textSize = labelSize;
+
+    // filter.
+    knobX += knobSize;
+    _filterKindKnob.position = rectangle(
+        knobX, labelMargin, knobSize, knobSize);
+    _filterKindLabel.textSize = labelSize;
+    _filterKindLabel.position = rectangle(
+        knobX, _filterKindKnob.position.max.y, knobSize, labelSize);
+
+    _filterCutoffKnob.position = rectangle(
+        knobX, _filterKindLabel.position.max.y, knobSize, knobSize);
+    _filterCutoffLabel.textSize = labelSize;
+    _filterCutoffLabel.position = rectangle(
+        knobX, _filterCutoffKnob.position.max.y, knobSize, labelSize);
+
+    _filterResKnob.position = rectangle(
+        knobX, _filterCutoffLabel.position.max.y, knobSize, knobSize);
+    _filterResLabel.textSize = labelSize;
+    _filterResLabel.position = rectangle(
+        knobX, _filterResKnob.position.max.y, knobSize, labelSize);
+
+    // etc.
+    _title.position = rectangle(0, _envui.position.max.y,
+                                _envui.position.width * 2 / 3,
+                                cast(int) (H * 0.1));
+    _title.textSize = _title.position.height;
+
+    int dateLabelSize = cast(int) _title.textSize / 3;
+    _date.position = rectangle(_title.position.max.x,
+                               H - dateLabelSize,
+                               _envui.position.width - _title.position.width,
+                               dateLabelSize);
+    _date.textSize = dateLabelSize;
+
+    int hintSize = H / 20;
     _resizer.position = rectangle(W - hintSize, H - hintSize,
                                   hintSize, hintSize);
   }
+
+  override void onParameterChanged(Parameter sender) {
+    if (sender.index == Params.rate) {
+      if (EnumParameter rate = cast(EnumParameter) sender) {
+        _rateLabel.text(rateLabels[rate.value]);
+      }
+    } else if (sender.index == Params.destination) {
+      if (EnumParameter dest = cast(EnumParameter) sender) {
+        _destinationLabel.text(destinationNames[dest.value]);
+      }
+    } else if (sender.index == Params.filterKind) {
+      if (EnumParameter kind = cast(EnumParameter) sender) {
+        _filterKindLabel.text(filterNames[kind.value]);
+      }
+    }
+  }
+
+  override void onBeginParameterEdit(Parameter sender) {}
+
+  override void onEndParameterEdit(Parameter sender) {}
+
+  override void onBeginParameterHover(Parameter sender) {}
+
+  override void onEndParameterHover(Parameter sender) {}
 
  private:
   UIKnob buildKnob(Params pid) {
@@ -371,8 +447,10 @@ class EnvToolGUI : PBRSimpleGUI {
   Parameter[] _params;
   UIWindowResizer _resizer;
   EnvelopeUI _envui;
-  UIKnob _rateKnob, _depthKnob, _stereoOffsetKnob;
-  UILabel _rateLabel, _depthLabel, _stereoOffsetLabel;
+  UIKnob _rateKnob, _depthKnob, _stereoOffsetKnob, _destinationKnob,
+    _filterKindKnob, _filterCutoffKnob, _filterResKnob;
+  UILabel _rateLabel, _depthLabel, _stereoOffsetLabel, _destinationLabel,
+    _filterKindLabel, _filterCutoffLabel, _filterResLabel;
 
   enum litTrailDiffuse = RGBA(151, 119, 255, 100);
   enum unlitTrailDiffuse = RGBA(81, 54, 108, 0);

@@ -5,6 +5,18 @@ import dplug.core;
 import dplug.client;
 
 import kdr.envelope;
+import kdr.filter;
+
+/// Envelope mod destination.
+enum Destination {
+  volume,
+  pan,
+  cutoff,
+}
+
+/// String names of destinations.
+static immutable destinationNames = [__traits(allMembers, Destination)];
+
 
 /// Parameter for EnvToolClient.
 enum Params {
@@ -13,11 +25,10 @@ enum Params {
   rate,
   depth,
   stereoOffset,
-  // volumeMod,
-  // filterMod,
-  // filterMode,
-  // filterCutoff,
-  // filterRes,
+  destination,
+  filterKind,
+  filterCutoff,
+  filterRes,
 }
 
 /// Used by the "rate" param.
@@ -58,6 +69,14 @@ Parameter[] buildEnvelopeParameters() {
   params.pushBack(mallocNew!LinearFloatParameter(n++, "depth", "", 0.0, 1.0, 1.0));
   assert(n == Params.stereoOffset);
   params.pushBack(mallocNew!LinearFloatParameter(n++, "stereoOffset", "", -1, 1, 0.0));
+  assert(n == Params.destination);
+  params.pushBack(mallocNew!EnumParameter(n++, "destination", destinationNames, Destination.volume));
+  assert(n == Params.filterKind);
+  params.pushBack(mallocNew!EnumParameter(n++, "filterKind", filterNames, FilterKind.none));
+  assert(n == Params.filterCutoff);
+  params.pushBack(mallocNew!LogFloatParameter(n++, "filterCutoff", "",  0.01, 1, 1));
+  assert(n == Params.filterRes);
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "filterRes", "",  0, 1, 0));
 
   return params.releaseData();
 }

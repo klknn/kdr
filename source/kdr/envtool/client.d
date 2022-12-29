@@ -9,6 +9,7 @@ import dplug.core;
 import kdr.envelope : Envelope;
 import kdr.envtool.gui : EnvToolGUI;
 import kdr.envtool.params;
+import kdr.filter;
 import kdr.logging : logInfo;
 
 /// Env tool client.
@@ -44,20 +45,42 @@ class EnvToolClient : Client {
   override void reset(
       double sampleRate, int maxFrames, int numInputs, int numOutputs) {
     _sampleRate = sampleRate;
+    foreach (ref f; _filter) f.setSampleRate(sampleRate);
   }
 
   override void processAudio(
       const(float*)[] inputs, float*[] outputs, int frames, TimeInfo info) {
+    const Destination dst = readParam!Destination(Params.destination);
+
+    // Setup rate.
     const Envelope env = buildEnvelope(params);
     const double beatScale = rateValues[readParam!int(Params.rate)] * 4;
     const float depth = readParam!float(Params.depth);
     const double beatPerSample = info.tempo / 60 / _sampleRate;
+
+    // Setup filter.
+    const fkind = readParam!FilterKind(Params.filterKind);
+    const fcutoff = readParam!float(Params.filterCutoff);
+    const fres = readParam!float(Params.filterRes);
+    foreach (ref f; _filter) f.setParams(fkind, fcutoff, fres);
+
     foreach (c; 0 .. inputs.length) {
       float offset = c == 0 ? 0 : readParam!float(Params.stereoOffset);
       foreach (t; 0 .. frames) {
         const double beats = (info.timeInSamples + t) * beatPerSample;
-        const float e = env.getY((beats / beatScale + offset) % 1.0);
-        outputs[c][t] = (depth * e + 1.0 - depth) * inputs[c][t];
+        float e = env.getY((beats / beatScale + offset) % 1.0);
+        if (dst == Destination.volume) {
+          outputs[c][t] = e * inputs[c][t];
+        } else if (dst == Destination.cutoff) {
+          _filter[c].setParams(fkind, e * fcutoff, fres);
+          outputs[c][t] = inputs[c][t];
+        } else if (dst == Destination.pan) {
+          float pan = c == 0 ? e : 1.0 - e;
+          outputs[c][t] = pan * inputs[c][t];
+        }
+        outputs[c][t] = _filter[c].apply(outputs[c][t]);
+        // mix dry and wet signals.
+        outputs[c][t] = depth * outputs[c][t] + (1.0 - depth) * inputs[c][t];
       }
     }
   }
@@ -65,4 +88,5 @@ class EnvToolClient : Client {
  private:
   EnvToolGUI _gui;
   double _sampleRate;
+  Filter[2] _filter;
 }
