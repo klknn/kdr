@@ -292,6 +292,10 @@ class EnvToolGUI : PBRSimpleGUI {
     _stereoOffsetLabel = buildLabel("offset");
   }
 
+  ~this() {
+    destroyFree(_font);
+  }
+
   override void reflow() {
     super.reflow();
     const int W = position.width;
