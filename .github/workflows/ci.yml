@@ -31,6 +31,7 @@ jobs:
           - synth2
           - freeverb
           - envtool
+          - epiano2
         compiler:
           - 'ldc-latest'
     steps:
