@@ -10,10 +10,6 @@ on:
 env:
   VST2_SDK: ${{ github.workspace }}/VST2_SDK
   SETUP_VST2_SDK: true
-  # List of commands
-  DPlugBuild: ${{ github.workspace }}/Dplug/tools/dplug-build/dplug-build
-  DplugProcess: ${{ github.workspace }}/Dplug/tools/process/process
-
 
 defaults:
   run:
@@ -35,6 +31,7 @@ jobs:
           - synth2
           - freeverb
           - envtool
+          - epiano2
         compiler:
           - 'ldc-latest'
     steps:
@@ -43,13 +40,6 @@ jobs:
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Checkout Dplug repo
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        repository: AuburnSounds/Dplug
-        path: Dplug
 
     # Cache
     - name: Cache
@@ -73,11 +63,6 @@ jobs:
       uses: dlang-community/setup-dlang@v1
       with:
         compiler: ${{ matrix.compiler }}
-
-    - name: Install dplug-build
-      run: |
-        dub build
-      working-directory: ./Dplug/tools/dplug-build
 
     - name: Setup VST2_SDK
       if: contains(env.SETUP_VST2_SDK, 'true') && steps.kdr-cache.outputs.cache-hit != 'true'
@@ -105,7 +90,7 @@ jobs:
           $Plugins = "-c VST2 -c VST3 -c LV2"
         }
         $esc = '--%'
-        ${{ env.DPlugBuild }} $esc $Plugins --final
+        dub run dplug:dplug-build -- $esc $Plugins --final
       working-directory: bin/${{ matrix.plugin }}
 
     - name: Archive zip
