@@ -89,8 +89,7 @@ jobs:
         } elseif ("${{ matrix.os }}" -like 'ubuntu*') {
           $Plugins = "-c VST2 -c VST3 -c LV2"
         }
-        $esc = '--%'
-        dub run dplug:dplug-build $esc $Plugins --final
+        dub run dplug:dplug-build -- $Plugins --final
       working-directory: bin/${{ matrix.plugin }}
 
     - name: Archive zip
