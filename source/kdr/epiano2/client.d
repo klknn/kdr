@@ -8,11 +8,11 @@ module kdr.epiano2.client;
 
 import std.algorithm : min;
 
-import dplug.core : mallocNew, makeVec;
+import dplug.core : mallocNew, makeVec, Vec;
 import dplug.client : Client, IntegerParameter, LegalIO, LinearFloatParameter, MidiControlChange, MidiMessage, Parameter, Preset, TimeInfo;
 import mir.math : fabs, fastmath, exp, pow;
 
-import kdr.epiano2.data : epianoData;
+import kdr.audiofmt : Wav;
 import kdr.epiano2.parameter : ModParameter;
 
 enum Param : int {
@@ -59,6 +59,12 @@ struct KeyGroup {
   int end;
   int loop;
 }
+
+// mixin(import("epiano2_wav.d"));
+
+// unittest {
+//   assert(epianoData.length > 422414);  // 422418
+// }
 
 abstract class Epiano2Client : Client {
   @fastmath nothrow @nogc public:
@@ -112,7 +118,11 @@ abstract class Epiano2Client : Client {
     kgrp[31].pos = 406046;  kgrp[31].end = 414486;  kgrp[31].loop = 2306; //ghost
     kgrp[32].pos = 414487;  kgrp[32].end = 422408;  kgrp[32].loop = 2169;
 
-    waves = epianoData;
+
+    Wav epianoWav = Wav(import("epiano.wav"));
+    const short[] epianoData = epianoWav.data;
+    waves = makeVec!short(epianoData.length);
+    waves.ptr[0 .. epianoData.length] = epianoData;
 
     //extra xfade looping...
     foreach (k; 0 .. 28) {
@@ -445,7 +455,7 @@ abstract class Epiano2Client : Client {
 
   // Global internal variables
   KeyGroup[34] kgrp;
-  short[epianoData.length] waves;
+  Vec!short waves;
 
   enum SILENCE = 0.0001f;
   enum SUSTAIN = 128;
