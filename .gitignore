@@ -23,6 +23,7 @@ third_party/*~
 !resource/*.lst
 !resource/*.png
 !resource/*.ttf
+!resource/*.wav
 
 !.github/
 !.github/workflows/
