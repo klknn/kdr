@@ -1,9 +1,3 @@
-/**
-Epiano2 custom parameters.
-
-Copyright: klknn 2022.
-License:   MIT, GPL v2 or any later version (See LICENSE).
-*/
 module kdr.epiano2.parameter;
 
 import core.stdc.stdio : snprintf, sscanf;

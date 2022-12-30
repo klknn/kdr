@@ -1,9 +1,3 @@
-/**
-Epiano2 dplug client.
-
-Copyright: klknn 2022.
-License:   MIT, GPL v2 or any later version (See LICENSE).
-*/
 module kdr.epiano2.client;
 
 import std.algorithm : min;
@@ -59,12 +53,6 @@ struct KeyGroup {
   int end;
   int loop;
 }
-
-// mixin(import("epiano2_wav.d"));
-
-// unittest {
-//   assert(epianoData.length > 422414);  // 422418
-// }
 
 abstract class Epiano2Client : Client {
   @fastmath nothrow @nogc public:
