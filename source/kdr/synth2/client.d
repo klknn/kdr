@@ -33,6 +33,7 @@ import kdr.oscillator : Oscillator;
 import kdr.params : buildParams;
 import kdr.waveform : Waveform;
 import kdr.synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
+import kdr.testing : BenchmarkWithDefaultParams, GenericTestHost;
 version (unittest) {} else import kdr.synth2.gui : Synth2GUI;
 
 /// Polyphonic digital-aliasing synth
@@ -435,108 +436,60 @@ class Synth2Client : Client {
   version (unittest) {} else Synth2GUI _gui;
 }
 
+mixin BenchmarkWithDefaultParams!Synth2Client;
 
-/// Mock host for testing Synth2Client.
-private struct TestHost {
-  Synth2Client client;
-  int frames = 8;
-  Vec!float[2] outputFrames;
-  MidiMessage msg1 = makeMidiMessageNoteOn(0, 0, 100, 100);
-  MidiMessage msg2 = makeMidiMessageNoteOn(1, 0, 90, 10);
-  MidiMessage msg3 = makeMidiMessageNoteOff(2, 0, 100);
-  bool noteOff = false;
+alias TestHost = GenericTestHost!Synth2Client;
 
-  @nogc nothrow:
-
-  /// Sets param to test.
-  private void setParam(Params pid, T)(T val) {
-    auto p = __traits(getMember, ParamBuilder, paramNames[pid]);
-    static if (is(T == enum)) {
-      double v;
-      v = double.init;  // for d-scanner.
-      static immutable names = [__traits(allMembers, T)];
-      assert(p.normalizedValueFromString(names[val], v));
-    }
-    else static if (is(T == bool)) {
-      auto v = val ? 1.0 : 0.0;
-    }
-    else static if (is(T == int)) {
-      auto v = clamp((cast(double)val - p.minValue) /
-                     (p.maxValue - p.minValue), 0.0, 1.0);
-    }
-    else static if (is(T : double)) {
-      auto v = p.toNormalized(val);
-    }
-    else {
-      static assert(false, "unknown param");
-    }
-    client.param(pid).setFromHost(v);
+/// Sets param to test.
+void setParam(int pid, T)(ref TestHost host, T val) {
+  auto p = __traits(getMember, ParamBuilder, paramNames[pid]);
+  static if (is(T == enum)) {
+    double v;
+    v = double.init;  // for d-scanner.
+    static immutable names = [__traits(allMembers, T)];
+    assert(p.normalizedValueFromString(names[val], v));
   }
-
-  void processAudio() {
-    outputFrames[0].resize(this.frames);
-    outputFrames[1].resize(this.frames);
-    client.reset(44_100, 32, 0, 2);
-
-    float*[2] inputs, outputs;
-    inputs[0] = null;
-    inputs[1] = null;
-    outputs[0] = &outputFrames[0][0];
-    outputs[1] = &outputFrames[1][0];
-
-    client.enqueueMIDIFromHost(msg1);
-    client.enqueueMIDIFromHost(msg2);
-    if (noteOff) {
-      client.enqueueMIDIFromHost(msg3);
-    }
-
-    TimeInfo info;
-    info.hostIsPlaying = true;
-    client.processAudioFromHost(inputs[], outputs[], frames, info);
+  else static if (is(T == bool)) {
+    auto v = val ? 1.0 : 0.0;
   }
-
-  /// Returns true iff the val changes outputs of processAudio.
-  bool paramChangeOutputs(Params pid, T)(T val) {
-    const double origin = this.client.param(pid).getForHost;
-
-    // 1st trial w/o param
-    this.processAudio();
-    auto prev = makeVec!float(this.frames);
-    foreach (i; 0 .. frames) {
-      prev[i] = outputFrames[0][i];
-    }
-    this.setParam!(pid, T)(val);
-
-    // 2nd trial w/ param
-    this.processAudio();
-
-    // revert param
-    this.client.param(pid).setFromHost(origin);
-
-    foreach (i; 0 .. frames) {
-      if (prev[i] != outputFrames[0][i])
-        return true;
-    }
-    return false;
+  else static if (is(T == int)) {
+    auto v = clamp((cast(double)val - p.minValue) /
+                   (p.maxValue - p.minValue), 0.0, 1.0);
   }
+  else static if (is(T : double)) {
+    auto v = p.toNormalized(val);
+  }
+  else {
+    static assert(false, "unknown param");
+  }
+  host.client.param(pid).setFromHost(v);
 }
 
-/// Test default params with benchmark.
-@nogc nothrow @system
-unittest {
-  import core.stdc.stdio : printf;
-  import std.datetime.stopwatch : benchmark;
+/// Returns true iff the val changes outputs of processAudio.
+bool paramChangeOutputs(int pid, T)(ref TestHost host, T val) {
+  const double origin = host.client.param(pid).getForHost;
 
-  TestHost host = { client: mallocNew!Synth2Client(), frames: 100 };
-  scope (exit) destroyFree(host.client);
-
-  host.processAudio();  // to omit the first record.
-  auto time = benchmark!(() => host.processAudio())(100)[0].split!("msecs", "usecs");
-  logInfo("benchmark synth2/default: %d ms %d us", cast(int) time.msecs, cast(int) time.usecs);
-  version (OSX) {} else {
-    version (LDC) assert(time.msecs <= 20);
+  // 1st trial w/o param
+  host.processAudio();
+  auto prev = makeVec!float(host.frames);
+  foreach (i; 0 .. host.frames) {
+    prev[i] = host.outputFrames[0][i];
   }
+  host.setParam!(pid, T)(val);
+
+  // 2nd trial w/ param
+  host.processAudio();
+
+  // revert param
+  host.client.param(pid).setFromHost(origin);
+
+  foreach (i; 0 .. host.frames) {
+    if (prev[i] != host.outputFrames[0][i])
+      return true;
+  }
+  return false;
 }
+
 
 /// Test deterministic outputs.
 @nogc nothrow @system

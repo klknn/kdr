@@ -3,7 +3,7 @@ module kdr.epiano2.client;
 import std.algorithm : min;
 
 import dplug.core : mallocNew, makeVec, Vec;
-import dplug.client : Client, IntegerParameter, LegalIO, LinearFloatParameter, MidiControlChange, MidiMessage, Parameter, Preset, TimeInfo;
+import dplug.client : Client, IntegerParameter, LegalIO, LinearFloatParameter, MidiControlChange, MidiMessage, Parameter, PluginInfo, Preset, TimeInfo;
 import mir.math : fabs, fastmath, exp, pow;
 
 import kdr.audiofmt : Wav;
@@ -54,7 +54,7 @@ struct KeyGroup {
   int loop;
 }
 
-abstract class Epiano2Client : Client {
+class Epiano2Client : Client {
   @fastmath nothrow @nogc public:
 
   this() {
@@ -128,6 +128,11 @@ abstract class Epiano2Client : Client {
         xf += dxf;
       }
     }
+  }
+
+  /// Needs to be overriden in bin/epiano2/main.d.
+  override PluginInfo buildPluginInfo() {
+    return PluginInfo.init;
   }
 
   override Preset[] buildPresets() {
@@ -459,3 +464,7 @@ abstract class Epiano2Client : Client {
   float muff = 160, muffvel = 0, sizevel, velsens = 1, volume = 0.2, modwhl = 0;
   float modulation = 0, decay = 0, release = 0;
 }
+
+import kdr.testing : BenchmarkWithDefaultParams;
+
+mixin BenchmarkWithDefaultParams!Epiano2Client;

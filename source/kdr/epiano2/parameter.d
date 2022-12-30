@@ -77,3 +77,31 @@ private void printValue(char* buffer, size_t numBytes, int v) @nogc nothrow {
   }
   snprintf(buffer, numBytes, "Pan %d", -v);
 }
+
+unittest {
+  import std.string : fromStringz;
+
+  auto p = new ModParameter(0, "mod", "", -100, 100, 0);
+  char[100] buf;
+  p.toStringN(buf.ptr, buf.length);
+  import std;
+  assert(buf.ptr.fromStringz == "Pan 0");
+  p.setFromHost(1);
+  p.toStringN(buf.ptr, buf.length);
+  assert(buf.ptr.fromStringz == "Trem 100");
+
+  double result;
+  assert(p.normalizedValueFromString("Trem 42", result));
+  p.stringFromNormalizedValue(result, buf.ptr, buf.length);
+  assert(buf.ptr.fromStringz == "Trem 42");
+  assert(p.fromNormalized(result) == 42);
+
+  assert(p.normalizedValueFromString("Pan 42", result));
+  p.stringFromNormalizedValue(result, buf.ptr, buf.length);
+  assert(buf.ptr.fromStringz == "Pan 42");
+  assert(p.fromNormalized(result) == -42);
+
+  assert(!p.normalizedValueFromString(buf, result),
+         "Should fail because of too long str.");
+  assert(!p.normalizedValueFromString("nonsense str", result));
+}
