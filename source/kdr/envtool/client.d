@@ -3,7 +3,7 @@ module kdr.envtool.client;
 import std.algorithm.comparison : clamp;
 
 import dplug.math : vec2f;
-import dplug.client : Client, IGraphics, LegalIO, LinearFloatParameter, Parameter, TimeInfo;
+import dplug.client : Client, IGraphics, LegalIO, LinearFloatParameter, Parameter, PluginInfo, TimeInfo;
 import dplug.core;
 
 import kdr.envelope : Envelope;
@@ -11,6 +11,7 @@ import kdr.envtool.gui : EnvToolGUI;
 import kdr.envtool.params;
 import kdr.filter;
 import kdr.logging : logInfo;
+import kdr.testing : benchmarkWithDefaultParams;
 
 /// Env tool client.
 class EnvToolClient : Client {
@@ -29,6 +30,10 @@ class EnvToolClient : Client {
 
   override Parameter[] buildParameters() {
     return buildEnvelopeParameters();
+  }
+
+  override PluginInfo buildPluginInfo() {
+    return PluginInfo.init;
   }
 
   override LegalIO[] buildLegalIO() {
@@ -69,14 +74,18 @@ class EnvToolClient : Client {
       foreach (t; 0 .. frames) {
         const double beats = (info.timeInSamples + t) * beatPerSample;
         float e = env.getY((beats / beatScale + offset) % 1.0);
-        if (dst == Destination.volume) {
-          outputs[c][t] = e * inputs[c][t];
-        } else if (dst == Destination.cutoff) {
-          _filter[c].setParams(fkind, e * fcutoff, fres);
-          outputs[c][t] = inputs[c][t];
-        } else if (dst == Destination.pan) {
-          float pan = c == 0 ? e : 1.0 - e;
-          outputs[c][t] = pan * inputs[c][t];
+        final switch (dst) {
+          case Destination.volume:
+            outputs[c][t] = e * inputs[c][t];
+            break;
+          case Destination.cutoff:
+            _filter[c].setParams(fkind, e * fcutoff, fres);
+            outputs[c][t] = inputs[c][t];
+            break;
+          case Destination.pan:
+            float pan = c == 0 ? e : 1.0 - e;
+            outputs[c][t] = pan * inputs[c][t];
+            break;
         }
         outputs[c][t] = _filter[c].apply(outputs[c][t]);
         // mix dry and wet signals.
@@ -89,4 +98,8 @@ class EnvToolClient : Client {
   EnvToolGUI _gui;
   double _sampleRate;
   Filter[2] _filter;
+}
+
+unittest {
+  benchmarkWithDefaultParams!EnvToolClient;
 }

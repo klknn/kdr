@@ -33,7 +33,7 @@ import kdr.oscillator : Oscillator;
 import kdr.params : buildParams;
 import kdr.waveform : Waveform;
 import kdr.synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
-import kdr.testing : BenchmarkWithDefaultParams, GenericTestHost;
+import kdr.testing : benchmarkWithDefaultParams, GenericTestHost;
 version (unittest) {} else import kdr.synth2.gui : Synth2GUI;
 
 /// Polyphonic digital-aliasing synth
@@ -436,7 +436,9 @@ class Synth2Client : Client {
   version (unittest) {} else Synth2GUI _gui;
 }
 
-mixin BenchmarkWithDefaultParams!Synth2Client;
+unittest {
+  benchmarkWithDefaultParams!Synth2Client;
+}
 
 alias TestHost = GenericTestHost!Synth2Client;
 

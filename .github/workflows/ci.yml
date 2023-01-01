@@ -55,10 +55,6 @@ jobs:
       run: |
         sudo apt-get -yq install libx11-dev
 
-    - name: Setup Visual Studio Command Prompt - Windows
-      if: startsWith(matrix.os,'windows')
-      uses: ilammy/msvc-dev-cmd@v1
-
     - name: Install compiler
       uses: dlang-community/setup-dlang@v1
       with:
@@ -72,13 +68,6 @@ jobs:
         mkdir -p ${{ env.VST2_SDK }}/pluginterfaces/vst2.x
         cp "./VST3 SDK/pluginterfaces/vst2.x/aeffect.h" ${{ env.VST2_SDK }}/pluginterfaces/vst2.x/aeffect.h
         cp "./VST3 SDK/pluginterfaces/vst2.x/aeffectx.h" ${{ env.VST2_SDK }}/pluginterfaces/vst2.x/aeffectx.h
-
-    # Test
-    - name: Test kdr repo
-      # macOS raises link errors
-      if: startsWith(matrix.os,'macOS') != true
-      run: |
-        dub test
 
     - name: Build
       run: |

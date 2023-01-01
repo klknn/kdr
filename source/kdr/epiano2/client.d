@@ -8,6 +8,7 @@ import mir.math : fabs, fastmath, exp, pow;
 
 import kdr.audiofmt : Wav;
 import kdr.epiano2.parameter : ModParameter;
+import kdr.testing : benchmarkWithDefaultParams;
 
 enum Param : int {
   envelopeDecay = 0,
@@ -465,6 +466,6 @@ class Epiano2Client : Client {
   float modulation = 0, decay = 0, release = 0;
 }
 
-import kdr.testing : BenchmarkWithDefaultParams;
-
-mixin BenchmarkWithDefaultParams!Epiano2Client;
+unittest {
+  benchmarkWithDefaultParams!Epiano2Client;
+}
