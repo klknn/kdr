@@ -21,10 +21,11 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - windows-latest
         arch:
           - 'x86_64'
         compiler:
-          # - 'dmd-beta'
+          - 'ldc-latest'
           - 'dmd-latest'
     steps:
     - name: Checkout master branch
