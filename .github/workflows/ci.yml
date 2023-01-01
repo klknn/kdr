@@ -2,8 +2,6 @@ name: ci
 
 on:
   push:
-    branches:
-      - master
   # Nightly builds
   schedule:
     - cron: '00 00 * * *'
