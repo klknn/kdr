@@ -1,0 +1,15 @@
+{
+    "$schema": "https://raw.githubusercontent.com/AuburnSounds/dplug/master/plugin-schema.json",
+    "vendorName": "kdr",
+    "vendorUniqueID": "KDR_",
+    "vendorSupportEmail": "klknn.gh@gmail.com",
+    "pluginName": "kdr-comp1",
+    "pluginHomepage": "https://github.com/klknn/kdr",
+    "pluginUniqueID": "kcm1",
+    "publicVersion": "1.0.0",
+    "CFBundleIdentifierPrefix": "com.kdr",
+    "hasGUI": false,
+    "isSynth": false,
+    "receivesMIDI": true,
+    "category": "effectModulation"
+}
