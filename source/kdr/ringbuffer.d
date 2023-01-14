@@ -58,6 +58,10 @@ struct RingBuffer(T) {
         : _capacity + _back_idx - _front_idx;
   }
 
+  inout(T)[] slice() inout { return _ptr[0 .. length]; }
+
+  alias slice this;
+
  private:
   T* _ptr;
   size_t _capacity, _front_idx, _back_idx;
