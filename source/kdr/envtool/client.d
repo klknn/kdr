@@ -32,6 +32,7 @@ class EnvToolClient : Client {
     return buildEnvelopeParameters();
   }
 
+  @safe
   override PluginInfo buildPluginInfo() {
     return PluginInfo.init;
   }
@@ -43,14 +44,16 @@ class EnvToolClient : Client {
     return io.releaseData();
   }
 
+  @safe
   override int maxFramesInProcess() {
     return 32;
   }
 
+  @safe
   override void reset(
       double sampleRate, int maxFrames, int numInputs, int numOutputs) {
     _sampleRate = sampleRate;
-    foreach (ref f; _filter) f.setSampleRate(sampleRate);
+    foreach (ref Filter f; _filter) f.setSampleRate(sampleRate);
   }
 
   override void processAudio(
@@ -72,24 +75,30 @@ class EnvToolClient : Client {
     foreach (c; 0 .. inputs.length) {
       float offset = c == 0 ? 0 : readParam!float(Params.stereoOffset);
       foreach (t; 0 .. frames) {
-        const double beats = (info.timeInSamples + t) * beatPerSample;
-        float e = env.getY((beats / beatScale + offset) % 1.0);
-        final switch (dst) {
-          case Destination.volume:
-            outputs[c][t] = e * inputs[c][t];
-            break;
-          case Destination.cutoff:
-            _filter[c].setParams(fkind, e * fcutoff, fres);
-            outputs[c][t] = inputs[c][t];
-            break;
-          case Destination.pan:
-            float pan = c == 0 ? e : 1.0 - e;
-            outputs[c][t] = pan * inputs[c][t];
-            break;
+        float output = inputs[c][t];
+
+        if (info.hostIsPlaying) {
+          // Do envelope modutation.
+          const double beats = (info.timeInSamples + t) * beatPerSample;
+          const float e = env.getY((beats / beatScale + offset) % 1.0);
+
+          final switch (dst) {
+            case Destination.volume:
+              output *= e;
+              break;
+            case Destination.cutoff:
+              _filter[c].setParams(fkind, e * fcutoff, fres);
+              break;
+            case Destination.pan:
+              float pan = c == 0 ? e : 1.0 - e;
+              output *= pan;
+              break;
+          }
         }
-        outputs[c][t] = _filter[c].apply(outputs[c][t]);
+
+        output = _filter[c].apply(output);
         // mix dry and wet signals.
-        outputs[c][t] = depth * outputs[c][t] + (1.0 - depth) * inputs[c][t];
+        outputs[c][t] = depth * output + (1.0 - depth) * inputs[c][t];
       }
     }
   }
@@ -102,4 +111,17 @@ class EnvToolClient : Client {
 
 unittest {
   benchmarkWithDefaultParams!EnvToolClient;
+}
+
+// When host is not playing and filter is none.
+nothrow unittest {
+  auto client = new EnvToolClient;
+  TimeInfo info = {tempo: 120,  timeInSamples: -1, hostIsPlaying: false};
+  float[] inputs = [1, 2, 3, 4];
+  float[][] outputs = new float[][](2, inputs.length);
+  client.processAudio([&inputs[0], &inputs[0]], [&outputs[0][0], &outputs[1][0]],
+                      cast(int) inputs.length, info);
+  // Identity outputs.
+  assert(outputs[0] == inputs);
+  assert(outputs[1] == inputs);
 }
