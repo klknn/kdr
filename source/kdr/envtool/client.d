@@ -32,6 +32,7 @@ class EnvToolClient : Client {
     return buildEnvelopeParameters();
   }
 
+  @safe
   override PluginInfo buildPluginInfo() {
     return PluginInfo.init;
   }
@@ -43,14 +44,16 @@ class EnvToolClient : Client {
     return io.releaseData();
   }
 
+  @safe
   override int maxFramesInProcess() {
     return 32;
   }
 
+  @safe
   override void reset(
       double sampleRate, int maxFrames, int numInputs, int numOutputs) {
     _sampleRate = sampleRate;
-    foreach (ref f; _filter) f.setSampleRate(sampleRate);
+    foreach (ref Filter f; _filter) f.setSampleRate(sampleRate);
   }
 
   override void processAudio(
@@ -108,4 +111,17 @@ class EnvToolClient : Client {
 
 unittest {
   benchmarkWithDefaultParams!EnvToolClient;
+}
+
+// When host is not playing and filter is none.
+nothrow unittest {
+  auto client = new EnvToolClient;
+  TimeInfo info = {tempo: 120,  timeInSamples: -1, hostIsPlaying: false};
+  float[] inputs = [1, 2, 3, 4];
+  float[][] outputs = new float[][](2, inputs.length);
+  client.processAudio([&inputs[0], &inputs[0]], [&outputs[0][0], &outputs[1][0]],
+                      cast(int) inputs.length, info);
+  // Identity outputs.
+  assert(outputs[0] == inputs);
+  assert(outputs[1] == inputs);
 }
