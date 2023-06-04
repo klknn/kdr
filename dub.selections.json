@@ -1,9 +1,9 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"dplug": "13.4.9",
-		"gamut": "2.0.9",
-		"intel-intrinsics": "1.11.1",
-		"mir-core": "1.4.1"
+		"dplug": "13.6.0",
+		"gamut": "2.1.4",
+		"intel-intrinsics": "1.11.9",
+		"mir-core": "1.5.5"
 	}
 }
