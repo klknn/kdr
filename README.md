@@ -1,5 +1,7 @@
 # kdr: klknn dplug repo
 
+[⬇️ DOWNLOAD FREE PLUGINS ⬇️](https://github.com/klknn/kdr/releases)
+
 [![ci](https://github.com/klknn/kdr/actions/workflows/ci.yml/badge.svg)](https://github.com/klknn/kdr/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/klknn/kdr/branch/master/graph/badge.svg?token=4HMC5S2GER)](https://codecov.io/gh/klknn/kdr)
 
