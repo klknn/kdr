@@ -3,6 +3,7 @@
 !*/
 !*.d
 !*.ini
+!*.ipynb
 !*.json
 !*.md
 !*.py
