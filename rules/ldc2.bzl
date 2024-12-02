@@ -78,23 +78,22 @@ filegroup(
 )
 """
 
-def ldc2_archive(version, os, kernel, arch, ext):
-    name = "ldc2_" + kernel + "_" + arch
-    prefix = "ldc2-" + version + "-" + os + "-" + arch
-    tarxz = prefix + ext
+def ldc2_archive(name, version, prefix, ext):
+    archive = prefix + ext
     return http_archive(
         name = name,
-        urls = ["https://github.com/ldc-developers/ldc/releases/download/v" + version + "/" + tarxz],
-        sha256 = _LDC2_SHA256SUMS[tarxz],
+        urls = ["https://github.com/ldc-developers/ldc/releases/download/v" +
+                version + "/" + archive],
+        sha256 = _LDC2_SHA256SUMS[archive],
         strip_prefix=prefix,
         build_file_content = _LDC2_BUILD_FILE,
     )
 
 def ldc2_repositories(version="1.28.0"):
-    # TODO(karita): Support non x86_64 arch
-    ldc2_archive(version, "linux", "linux", "x86_64", ".tar.xz")
-    ldc2_archive(version, "osx", "darwin", "x86_64", ".tar.xz")
-    ldc2_archive(version, "windows", "windows", "x64", ".7z")
+    ldc2_archive("ldc2_linux_x86_64", version, 'ldc2-' + version + "-linux-x86_64", ".tar.xz")
+    ldc2_archive("ldc2_darwin_x86_64", version, 'ldc2-' + version + "-osx-x86_64", ".tar.xz")
+    # TODO(klknn): 7z is not support by http_archive. Use https://github.com/zaucy/rules_7zip
+    # ldc2_archive("ldc2_windows_x86_64", version, 'ldc2-' + version + "-windows-x64", ".7z")
 
 ldc2_compile_attrs = {
     "_ldc2_flag_version": attr.string(default = "--d-version"),
