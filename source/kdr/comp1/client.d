@@ -7,6 +7,7 @@ import kdr.logging : logInfo;
 import kdr.comp1.gui : Comp1GUI;
 
 /// Comp1 client.
+/// See [root]/bin/comp1/comp1.d for its final class with plugin.json.
 class Comp1Client : Client {
 public nothrow @nogc:
 
