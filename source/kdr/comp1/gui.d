@@ -6,8 +6,18 @@ import dplug.pbrwidgets;
 import dplug.flatwidgets : UIWindowResizer;
 import kdr.simplegui;
 import kdr.logging : logDebug, logInfo;
+import kdr.comp1.params;
 
 enum RGBA TEXT_COLOR = RGBA(155, 255, 255, 0);
+enum RGBA lineColor = RGBA(0, 255, 255, 96);
+enum RGBA gradColor = RGBA(0, 64, 64, 96);
+enum RGBA gridColor = RGBA(100, 200, 200, 32);
+enum RGBA darkColor = RGBA(128, 128, 128, 128);
+enum RGBA lightColor = RGBA(100, 200, 200, 100);
+enum RGBA textColor = RGBA(155, 255, 255, 0);
+enum RGBA knobColor = RGBA(96, 96, 96, 96);
+enum RGBA litColor = RGBA(155, 255, 255, 0);
+enum RGBA unlitColor = RGBA(0, 32, 32, 0);
 
 // GUI for down/upward gain compressions.
 class GainUI : UIElement {
@@ -31,13 +41,23 @@ class Comp1GUI : PBRSimpleGUI {
     logDebug("Initialize %s", __FUNCTION__.ptr);
 
     static immutable float[] ratios = [1.0f, 1.25f, 1.5f, 1.75f, 2.0f];
-    super(makeSizeConstraintsDiscrete(600, 300, ratios));
+    super(makeSizeConstraintsDiscrete(400, 600, ratios));
 
     addChild(_resizer = mallocNew!UIWindowResizer(context()));
 
+    _params = params;
     _font = mallocNew!Font(cast(ubyte[]) import("FORCED SQUARE.ttf"));
     _title = buildLabel("kdr comp1");
-    _date = buildLabel("build: " ~ __DATE__ ~ "");
+    _date = buildLabel("" ~ __DATE__ ~ "" ~ __TIME__);
+
+    _depth = buildKnob(Params.depth);
+    _depthLabel = buildLabel("DEPTH");
+    _time = buildKnob(Params.time);
+    _timeLabel = buildLabel("TIME");
+    _inGain = buildKnob(Params.inGain);
+    _inGainLabel = buildLabel("IN GAIN");
+    _outGain = buildKnob(Params.outGain);
+    _outGainLabel = buildLabel("OUT GAIN");
   }
 
   ~this() {
@@ -48,28 +68,48 @@ class Comp1GUI : PBRSimpleGUI {
     super.reflow();
     const int W = position.width;
     const int H = position.height;
-    const int margin = H / 50;
+    const float S = W / cast(float)(context.getDefaultUIWidth());
 
-    // etc.
-    const int titleSize = H / 10;
-    _title.position = rectangle(0, margin,
-                                W / 2,
-                                titleSize);
-    _title.textSize = titleSize;
+    // Header.
+    _title.position = rectangle(10, 10, 250, 40).scaleByFactor(S);
+    _title.textSize = 40;
+    _date.position = rectangle(260, 10, 100, 10).scaleByFactor(S);
+    _date.textSize = 10;
 
-    int dateLabelSize = cast(int) _title.textSize / 3;
-    _date.position = rectangle(_title.position.max.x,
-                               H - dateLabelSize,
-                               W - _title.position.width,
-                               dateLabelSize);
-    _date.textSize = dateLabelSize;
+    // Top knobs.
+    int knobSize = 100;
+    int knobLabelSize = 20;
+    int knobY = 50;
+    _depth.position = rectangle(0, knobY, knobSize, knobSize);
+    _depthLabel.position = rectangle(0, knobY + knobSize, knobSize, knobLabelSize);
+    _time.position = rectangle(knobSize, knobY, knobSize, knobSize);
+    _timeLabel.position = rectangle(knobSize, knobY + knobSize, knobSize, knobLabelSize);
+    _inGain.position = rectangle(knobSize * 2, knobY, knobSize, knobSize);
+    _outGain.position = rectangle(knobSize * 3, knobY, knobSize, knobSize);
 
+
+    // Footer.
     int hintSize = H / 20;
     _resizer.position = rectangle(W - hintSize, H - hintSize,
-                                  hintSize, hintSize);
+                                  hintSize, hintSize).scaleByFactor(S);
   }
 
  private:
+  UIKnob buildKnob(Params pid) {
+    UIKnob knob;
+    addChild(knob = mallocNew!UIKnob(this.context, _params[pid]));
+    knob.knobRadius = 0.65f;
+    knob.knobDiffuse = knobColor;
+    // NOTE: material [R(smooth), G(metal), B(shiny), A(phisycal)]
+    knob.knobMaterial = RGBA(255, 0, 0, 0);
+    knob.numLEDs = 0;
+    knob.litTrailDiffuse = litColor;
+    knob.unlitTrailDiffuse = unlitColor;
+    knob.trailRadiusMin = 0.1;
+    knob.trailRadiusMax = 0.8;
+    return knob;
+  }
+
   UILabel buildLabel(string text) {
     UILabel label;
     addChild(label = mallocNew!UILabel(this.context, _font, text));
@@ -78,6 +118,8 @@ class Comp1GUI : PBRSimpleGUI {
   }
 
   Font _font;
-  UILabel _title, _date;
+  UILabel _title, _date, _depthLabel, _timeLabel, _inGainLabel, _outGainLabel;
   UIWindowResizer _resizer;
+  UIKnob _depth, _time, _inGain, _outGain;
+  Parameter[] _params;
 }

@@ -5,6 +5,7 @@ import dplug.core;
 
 import kdr.logging : logInfo;
 import kdr.comp1.gui : Comp1GUI;
+import kdr.comp1.params;
 
 /// Comp1 client.
 /// See [root]/bin/comp1/comp1.d for its final class with plugin.json.
@@ -19,13 +20,13 @@ public nothrow @nogc:
 
   override IGraphics createGraphics() {
     if (!_gui) {
-      _gui = mallocNew!Comp1GUI(buildParameters());
+      _gui = mallocNew!Comp1GUI(params);
     }
     return _gui;
   }
 
   override Parameter[] buildParameters() {
-    return [];
+    return buildParams();
   }
 
   override PluginInfo buildPluginInfo() {
