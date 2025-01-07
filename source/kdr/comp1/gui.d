@@ -67,34 +67,45 @@ class Comp1GUI : PBRSimpleGUI {
   override void reflow() {
     super.reflow();
     const int W = position.width;
-    const int H = position.height;
     const float S = W / cast(float)(context.getDefaultUIWidth());
 
     // Header.
-    _title.position = rectangle(10, 10, 250, 40).scaleByFactor(S);
-    _title.textSize = 40;
-    _date.position = rectangle(260, 10, 100, 10).scaleByFactor(S);
-    _date.textSize = 10;
+    int headerY = 10;
+    _title.position = rect(0, headerY, 250, 40);
+    _title.textSize = 40 * S;
+    _date.position = rect(250, headerY, 150, 15);
+    _date.textSize = 15 * S;
 
     // Top knobs.
     int knobSize = 100;
-    int knobLabelSize = 20;
+    int knobLabelSize = 15;
     int knobY = 50;
-    _depth.position = rectangle(0, knobY, knobSize, knobSize);
-    _depthLabel.position = rectangle(0, knobY + knobSize, knobSize, knobLabelSize);
-    _time.position = rectangle(knobSize, knobY, knobSize, knobSize);
-    _timeLabel.position = rectangle(knobSize, knobY + knobSize, knobSize, knobLabelSize);
-    _inGain.position = rectangle(knobSize * 2, knobY, knobSize, knobSize);
-    _outGain.position = rectangle(knobSize * 3, knobY, knobSize, knobSize);
+    _depth.position = rect(0, knobY, knobSize, knobSize);
+    _depthLabel.position = rect(0, knobY + knobSize, knobSize, knobLabelSize);
+    _depthLabel.textSize = knobLabelSize * S;
+    _time.position = rect(knobSize, knobY, knobSize, knobSize);
+    _timeLabel.position = rect(knobSize, knobY + knobSize, knobSize, knobLabelSize);
+    _timeLabel.textSize = knobLabelSize * S;
+    _inGain.position = rect(knobSize * 2, knobY, knobSize, knobSize);
+    _inGainLabel.position = rect(knobSize * 2, knobY + knobSize, knobSize, knobLabelSize);
+    _inGainLabel.textSize = knobLabelSize * S;
+    _outGain.position = rect(knobSize * 3, knobY, knobSize, knobSize);
+    _outGainLabel.position = rect(knobSize * 3, knobY + knobSize, knobSize, knobLabelSize);
+    _outGainLabel.textSize = knobLabelSize * S;
 
 
     // Footer.
-    int hintSize = H / 20;
-    _resizer.position = rectangle(W - hintSize, H - hintSize,
-                                  hintSize, hintSize).scaleByFactor(S);
+    int hintSize = 20;
+    _resizer.position = rect(400 - hintSize, 600 - hintSize, hintSize, hintSize);
   }
 
  private:
+  box2i rect(int x, int y, int w, int h) {
+    const int W = position.width;
+    const float S = W / cast(float)(context.getDefaultUIWidth());
+    return rectangle(x, y, w, h).scaleByFactor(S);
+  }
+
   UIKnob buildKnob(Params pid) {
     UIKnob knob;
     addChild(knob = mallocNew!UIKnob(this.context, _params[pid]));
