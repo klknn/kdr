@@ -1,5 +1,6 @@
 module kdr.comp1.gui;
 
+import dplug.canvas;
 import dplug.client;
 import dplug.gui;
 import dplug.pbrwidgets;
@@ -30,6 +31,8 @@ class GainUI : UIElement {
 
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
   }
+ private:
+  Canvas _canvas;
 }
 
 /// GUI for comp1.
