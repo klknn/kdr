@@ -1,5 +1,6 @@
 module kdr.comp1.gui;
 
+import std.algorithm : max;
 import dplug.canvas;
 import dplug.client;
 import dplug.gui;
@@ -16,12 +17,56 @@ enum RGBA gridColor = RGBA(100, 200, 200, 32);
 enum RGBA darkColor = RGBA(128, 128, 128, 128);
 enum RGBA lightColor = RGBA(100, 200, 200, 100);
 enum RGBA textColor = RGBA(155, 255, 255, 0);
-enum RGBA knobColor = RGBA(96, 96, 96, 96);
+enum RGBA knobColor = RGBA(96, 96, 96, 0);
 enum RGBA litColor = RGBA(155, 255, 255, 0);
 enum RGBA unlitColor = RGBA(0, 32, 32, 0);
 
 // GUI for down/upward gain compressions.
-class GainUI : UIElement {
+class CompUI : UIElement {
+ public:
+  @nogc nothrow:
+
+  this(UIContext context, Parameter above, Parameter below) {
+    super(context, flagRaw);
+    _above_param = above;
+    _below_param = below;
+  }
+
+  override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
+    double aboveThresholdH = thresholdWidth(_above_param);
+    double belowThresholdH = thresholdWidth(_below_param);
+
+    foreach (ref rect; dirtyRects) {
+      ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
+      _canvas.initialize(cropped);
+      _canvas.translate(-rect.min.x, -rect.min.y);
+
+      // Draw background.
+      // _canvas.fillStyle =  RGBA(0, 32, 32, 200);
+      // _canvas.fillRect(0, 0, position.width, position.height);
+
+      // Draw gain compression ranges.
+      _canvas.fillStyle = belowColor;
+      _canvas.fillRect(0, 0, (1 - belowThresholdH) * position.width, position.height);
+      _canvas.fillStyle = aboveColor;
+      _canvas.fillRect(position.width * (1 - aboveThresholdH), 0,
+                       aboveThresholdH * position.width, position.height);
+    }
+  }
+
+ private:
+  double thresholdWidth(Parameter p) {
+    return max(minThreshold, (cast(GainParameter) p).value) / minThreshold;
+  }
+
+  Canvas _canvas;
+  Parameter _above_param, _below_param;
+  enum minThreshold = -80;
+  enum belowColor = RGBA(100, 150, 150, 200); //lightColor;
+  enum aboveColor = RGBA(150, 100, 100, 200);
+}
+
+class CompBackgroundUI : UIElement {
  public:
   @nogc nothrow:
 
@@ -30,10 +75,33 @@ class GainUI : UIElement {
   }
 
   override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
+    foreach (ref rect; dirtyRects) {
+      ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
+      _canvas.initialize(cropped);
+      _canvas.translate(-rect.min.x, -rect.min.y);
+
+      // Draw background.
+      auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
+      grad.addColorStop(0, RGBA(0, 32, 32, 200));
+      grad.addColorStop(position.height, gradColor);
+      _canvas.fillStyle = grad; // RGBA(0, 32, 32, 200);
+      _canvas.fillRect(0, 0, position.width, position.height);
+
+      // Draw grid.
+      _canvas.fillStyle = gridColor;
+      float dh = cast(float) position.height / 8;
+      float dw = cast(float) position.width / 8;
+      foreach (float i; 0 .. 9) {
+        _canvas.fillRect(dw * i, 0, 3, position.height);
+      }
+
+    }
   }
+
  private:
   Canvas _canvas;
 }
+
 
 /// GUI for comp1.
 class Comp1GUI : PBRSimpleGUI {
@@ -61,6 +129,17 @@ class Comp1GUI : PBRSimpleGUI {
     _inGainLabel = buildLabel("IN GAIN");
     _outGain = buildKnob(Params.outGain);
     _outGainLabel = buildLabel("OUT GAIN");
+
+    this.addChild(_compBackground = mallocNew!CompBackgroundUI(this.context));
+    this.addChild(_highComp = mallocNew!CompUI(
+        this.context, params[Params.aboveThresholdH], params[Params.belowThresholdH]));
+    _gainH = buildKnob(Params.gainH);
+    this.addChild(_midComp = mallocNew!CompUI(
+        this.context, params[Params.aboveThresholdM], params[Params.belowThresholdM]));
+    _gainM = buildKnob(Params.gainH);
+    this.addChild(_lowComp = mallocNew!CompUI(
+        this.context, params[Params.aboveThresholdL], params[Params.belowThresholdL]));
+    _gainL = buildKnob(Params.gainL);
   }
 
   ~this() {
@@ -96,6 +175,16 @@ class Comp1GUI : PBRSimpleGUI {
     _outGainLabel.position = rect(knobSize * 3, knobY + knobSize, knobSize, knobLabelSize);
     _outGainLabel.textSize = knobLabelSize * S;
 
+    // Multi-band compressor.
+    int compHeight = 70;
+    int compWidth = 350;
+    int compKnobSize = 50;
+    _highComp.position = rect(0, 200, compWidth, compHeight);
+    _midComp.position = rect(0, 200 + compHeight + 10, compWidth, compHeight);
+    _lowComp.position = rect(0, 200 + (compHeight + 10) * 2, compWidth, compHeight);
+    _gainH.position = rect(350, 200, compKnobSize, compKnobSize);
+
+    _compBackground.position = rect(0, 200 - 10, compWidth, compHeight * 3 + 10 * 4);
 
     // Footer.
     int hintSize = 20;
@@ -134,6 +223,8 @@ class Comp1GUI : PBRSimpleGUI {
   Font _font;
   UILabel _title, _date, _depthLabel, _timeLabel, _inGainLabel, _outGainLabel;
   UIWindowResizer _resizer;
-  UIKnob _depth, _time, _inGain, _outGain;
+  UIKnob _depth, _time, _inGain, _outGain, _gainH, _gainM, _gainL;
   Parameter[] _params;
+  CompUI _highComp, _midComp, _lowComp;
+  CompBackgroundUI _compBackground;
 }
