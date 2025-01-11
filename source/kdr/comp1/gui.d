@@ -13,7 +13,7 @@ import kdr.comp1.params;
 enum RGBA TEXT_COLOR = RGBA(155, 255, 255, 0);
 enum RGBA lineColor = RGBA(0, 255, 255, 96);
 enum RGBA gradColor = RGBA(0, 64, 64, 96);
-enum RGBA gridColor = RGBA(100, 200, 200, 32);
+enum RGBA gridColor = RGBA(100, 100, 100, 75);
 enum RGBA darkColor = RGBA(128, 128, 128, 128);
 enum RGBA lightColor = RGBA(100, 200, 200, 100);
 enum RGBA textColor = RGBA(155, 255, 255, 0);
@@ -41,13 +41,16 @@ public:
       _canvas.initialize(cropped);
       _canvas.translate(-rect.min.x, -rect.min.y);
 
-      // Draw background.
-      // _canvas.fillStyle =  RGBA(0, 32, 32, 200);
-      // _canvas.fillRect(0, 0, position.width, position.height);
-
       // Draw gain compression ranges.
       _canvas.fillStyle = belowColor;
       _canvas.fillRect(0, 0, (1 - belowThresholdH) * position.width, position.height);
+
+      _canvas.fillStyle = midColor;
+      _canvas.fillRect((1 - belowThresholdH) * position.width,
+        0,
+        position.width * (1 - aboveThresholdH),
+        position.height);
+
       _canvas.fillStyle = aboveColor;
       _canvas.fillRect(position.width * (1 - aboveThresholdH), 0,
         aboveThresholdH * position.width, position.height);
@@ -62,13 +65,15 @@ private:
   Canvas _canvas;
   Parameter _above_param, _below_param;
   enum minThreshold = -80;
-  enum belowColor = RGBA(100, 150, 150, 200); //lightColor;
-  enum aboveColor = RGBA(150, 100, 100, 200);
+  enum alphaColor = 120;
+  enum belowColor = RGBA(100, 150, 150, alphaColor);
+  enum midColor = RGBA(0, 32, 32, alphaColor);
+  enum aboveColor = RGBA(130, 100, 100, alphaColor);
 }
 
-enum BackgroundStart = RGBA(0, 255, 255, 32);
-enum BackgroundEnd = RGBA(0, 64, 64, 64);
-enum compBGColor = RGBA(0, 32, 32, 32);
+enum BackgroundStart = RGBA(0, 64, 64, 32);
+enum BackgroundEnd = RGBA(0, 16, 16, 128);
+enum compBGColor = RGBA(0, 32, 32, 64);
 
 class CompBackgroundUI : UIElement {
 public:
@@ -85,10 +90,10 @@ public:
       _canvas.translate(-rect.min.x, -rect.min.y);
 
       // Draw background.
-      // auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
-      // grad.addColorStop(0, BackgroundStart);
-      // grad.addColorStop(position.height, BackgroundEnd);
-      _canvas.fillStyle = compBGColor;
+      auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
+      grad.addColorStop(0, BackgroundStart);
+      grad.addColorStop(position.height, BackgroundEnd);
+      _canvas.fillStyle = grad; // compBGColor;
       _canvas.fillRect(0, 0, position.width, position.height);
 
       // Draw grid.
@@ -127,7 +132,7 @@ public:
       auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
       grad.addColorStop(0, BackgroundStart);
       grad.addColorStop(position.height, BackgroundEnd);
-      _canvas.fillStyle = compBGColor;
+      _canvas.fillStyle = grad; // compBGColor;
       _canvas.fillRect(0, 0, position.width, position.height);
     }
   }
@@ -255,7 +260,9 @@ public:
 
     // Footer.
     int hintSize = 20;
-    _resizer.position = rect(400 - hintSize, 600 - hintSize, hintSize, hintSize);
+    _resizer.position = rect(context.getDefaultUIWidth - hintSize,
+      context.getDefaultUIHeight - hintSize,
+      hintSize, hintSize);
   }
 
 private:
