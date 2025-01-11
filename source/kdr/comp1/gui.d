@@ -23,8 +23,8 @@ enum RGBA unlitColor = RGBA(0, 32, 32, 0);
 
 // GUI for down/upward gain compressions.
 class CompUI : UIElement {
- public:
-  @nogc nothrow:
+public:
+@nogc nothrow:
 
   this(UIContext context, Parameter above, Parameter below) {
     super(context, flagRaw);
@@ -50,11 +50,11 @@ class CompUI : UIElement {
       _canvas.fillRect(0, 0, (1 - belowThresholdH) * position.width, position.height);
       _canvas.fillStyle = aboveColor;
       _canvas.fillRect(position.width * (1 - aboveThresholdH), 0,
-                       aboveThresholdH * position.width, position.height);
+        aboveThresholdH * position.width, position.height);
     }
   }
 
- private:
+private:
   double thresholdWidth(Parameter p) {
     return max(minThreshold, (cast(GainParameter) p).value) / minThreshold;
   }
@@ -66,9 +66,52 @@ class CompUI : UIElement {
   enum aboveColor = RGBA(150, 100, 100, 200);
 }
 
+enum BackgroundStart = RGBA(0, 255, 255, 32);
+enum BackgroundEnd = RGBA(0, 64, 64, 64);
+enum compBGColor = RGBA(0, 32, 32, 32);
+
 class CompBackgroundUI : UIElement {
- public:
-  @nogc nothrow:
+public:
+@nogc nothrow:
+
+  this(UIContext context) {
+    super(context, flagRaw);
+  }
+
+  override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
+    foreach (ref rect; dirtyRects) {
+      ImageRef!RGBA cropped = cropImageRef(rawMap, rect);
+      _canvas.initialize(cropped);
+      _canvas.translate(-rect.min.x, -rect.min.y);
+
+      // Draw background.
+      // auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
+      // grad.addColorStop(0, BackgroundStart);
+      // grad.addColorStop(position.height, BackgroundEnd);
+      _canvas.fillStyle = compBGColor;
+      _canvas.fillRect(0, 0, position.width, position.height);
+
+      // Draw grid.
+      // auto linegrad = _canvas.createLinearGradient(0, 0, 0, position.height);
+      // linegrad.addColorStop(0, gridColor);
+      // linegrad.addColorStop(position.height, RGBA(0, 100, 100, 100));
+      _canvas.fillStyle = gridColor;
+      float dh = cast(float) position.height / 8;
+      float dw = cast(float) position.width / 8;
+      foreach (float i; 1 .. 9) {
+        _canvas.fillRect(dw * i - 2, 0, 2, position.height);
+      }
+
+    }
+  }
+
+private:
+  Canvas _canvas;
+}
+
+class CompKnobsBackgroundUI : UIElement {
+public:
+@nogc nothrow:
 
   this(UIContext context) {
     super(context, flagRaw);
@@ -82,37 +125,27 @@ class CompBackgroundUI : UIElement {
 
       // Draw background.
       auto grad = _canvas.createLinearGradient(0, 0, 0, position.height);
-      grad.addColorStop(0, RGBA(0, 32, 32, 200));
-      grad.addColorStop(position.height, gradColor);
-      _canvas.fillStyle = grad; // RGBA(0, 32, 32, 200);
+      grad.addColorStop(0, BackgroundStart);
+      grad.addColorStop(position.height, BackgroundEnd);
+      _canvas.fillStyle = compBGColor;
       _canvas.fillRect(0, 0, position.width, position.height);
-
-      // Draw grid.
-      _canvas.fillStyle = gridColor;
-      float dh = cast(float) position.height / 8;
-      float dw = cast(float) position.width / 8;
-      foreach (float i; 0 .. 9) {
-        _canvas.fillRect(dw * i, 0, 3, position.height);
-      }
-
     }
   }
 
- private:
+private:
   Canvas _canvas;
 }
 
-
 /// GUI for comp1.
 class Comp1GUI : PBRSimpleGUI {
- public:
-  @nogc nothrow:
+public:
+@nogc nothrow:
   ///
   this(Parameter[] params) {
     logDebug("Initialize %s", __FUNCTION__.ptr);
 
     static immutable float[] ratios = [1.0f, 1.25f, 1.5f, 1.75f, 2.0f];
-    super(makeSizeConstraintsDiscrete(400, 600, ratios));
+    super(makeSizeConstraintsDiscrete(400, 580, ratios));
 
     addChild(_resizer = mallocNew!UIWindowResizer(context()));
 
@@ -134,12 +167,22 @@ class Comp1GUI : PBRSimpleGUI {
     this.addChild(_highComp = mallocNew!CompUI(
         this.context, params[Params.aboveThresholdH], params[Params.belowThresholdH]));
     _gainH = buildKnob(Params.gainH);
+    _gainHLabel = buildLabel("H");
     this.addChild(_midComp = mallocNew!CompUI(
         this.context, params[Params.aboveThresholdM], params[Params.belowThresholdM]));
     _gainM = buildKnob(Params.gainH);
+    _gainMLabel = buildLabel("M");
     this.addChild(_lowComp = mallocNew!CompUI(
         this.context, params[Params.aboveThresholdL], params[Params.belowThresholdL]));
     _gainL = buildKnob(Params.gainL);
+    _gainLLabel = buildLabel("L");
+
+    this.addChild(_compKnobsBG = mallocNew!CompKnobsBackgroundUI(this.context));
+
+    _upwardStrength = buildKnob(Params.upwardStrength);
+    _upwardStrengthLabel = buildLabel("UPWARD");
+    _downwardStrength = buildKnob(Params.downwardStrength);
+    _downwardStrengthLabel = buildLabel("DOWNWARD");
   }
 
   ~this() {
@@ -182,16 +225,40 @@ class Comp1GUI : PBRSimpleGUI {
     _highComp.position = rect(0, 200, compWidth, compHeight);
     _midComp.position = rect(0, 200 + compHeight + 10, compWidth, compHeight);
     _lowComp.position = rect(0, 200 + (compHeight + 10) * 2, compWidth, compHeight);
-    _gainH.position = rect(350, 200, compKnobSize, compKnobSize);
 
-    _compBackground.position = rect(0, 200 - 10, compWidth, compHeight * 3 + 10 * 4);
+    int compTotalHeight = compHeight * 3 + 10 * 4;
+    _compBackground.position = rect(0, 200 - 10, compWidth, compTotalHeight);
+    _compKnobsBG.position = rect(350, 200 - 10, 50, compTotalHeight);
+    // _gainH.knobDiffuse = RGBA(200, 200, 200, 0);
+    int compKnobY = 200;
+    _gainH.position = rect(350, compKnobY, compKnobSize, compKnobSize);
+    compKnobY += compKnobSize;
+    _gainHLabel.position = rect(350, compKnobY, compKnobSize, 20);
+
+    compKnobY += 20 + 10;
+    _gainM.position = rect(350, compKnobY, compKnobSize, compKnobSize);
+    compKnobY += compKnobSize;
+    _gainMLabel.position = rect(350, compKnobY, compKnobSize, 20);
+
+    compKnobY += 20 + 10;
+    _gainL.position = rect(350, compKnobY, compKnobSize, compKnobSize);
+    compKnobY += compKnobSize;
+    _gainLLabel.position = rect(350, compKnobY, compKnobSize, 20);
+
+    int bottomKnobY = compKnobY + 20 + 10;
+    _upwardStrength.position = rect(knobSize, bottomKnobY, knobSize, knobSize);
+    _upwardStrengthLabel.position = rect(knobSize, bottomKnobY + knobSize, knobSize, 20);
+    _upwardStrengthLabel.textSize = knobLabelSize * S;
+    _downwardStrength.position = rect(knobSize * 2, bottomKnobY, knobSize, knobSize);
+    _downwardStrengthLabel.position = rect(knobSize * 2, bottomKnobY + knobSize, knobSize, 20);
+    _downwardStrengthLabel.textSize = knobLabelSize * S;
 
     // Footer.
     int hintSize = 20;
     _resizer.position = rect(400 - hintSize, 600 - hintSize, hintSize, hintSize);
   }
 
- private:
+private:
   box2i rect(int x, int y, int w, int h) {
     const int W = position.width;
     const float S = W / cast(float)(context.getDefaultUIWidth());
@@ -221,10 +288,15 @@ class Comp1GUI : PBRSimpleGUI {
   }
 
   Font _font;
-  UILabel _title, _date, _depthLabel, _timeLabel, _inGainLabel, _outGainLabel;
+  UILabel _title, _date, _depthLabel, _timeLabel, _inGainLabel, _outGainLabel,
+  _gainHLabel, _gainMLabel, _gainLLabel,
+  _upwardStrengthLabel, _downwardStrengthLabel;
   UIWindowResizer _resizer;
-  UIKnob _depth, _time, _inGain, _outGain, _gainH, _gainM, _gainL;
+  UIKnob _depth, _time, _inGain, _outGain,
+  _gainH, _gainM, _gainL,
+  _upwardStrength, _downwardStrength;
   Parameter[] _params;
   CompUI _highComp, _midComp, _lowComp;
   CompBackgroundUI _compBackground;
+  CompKnobsBackgroundUI _compKnobsBG;
 }

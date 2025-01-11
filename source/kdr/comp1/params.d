@@ -17,6 +17,8 @@ enum Params {
   aboveThresholdM,
   belowThresholdL,
   aboveThresholdL,
+  upwardStrength,
+  downwardStrength,
 }
 
 @nogc nothrow
@@ -37,6 +39,9 @@ Parameter[] buildParams() {
   params.pushBack(mallocNew!GainParameter(n++, "Above Threshold M", 0.0, -30.2));
   params.pushBack(mallocNew!GainParameter(n++, "Below Threshold L", 0.0, -40.8));
   params.pushBack(mallocNew!GainParameter(n++, "Above Threshold M", 0.0, -33.8));
+
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "Upwd Strgth", "", 0.0, 200.0, 100.0));
+  params.pushBack(mallocNew!LinearFloatParameter(n++, "Dnwd Strgth", "", 0.0, 200.0, 100.0));
 
   return params.releaseData();
 }
