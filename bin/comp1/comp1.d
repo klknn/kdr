@@ -1,7 +1,10 @@
 import dplug.core;
 import dplug.client;
 
-class ClientWithInfo : dplug.client.Client {
+import kdr.comp1.client;
+
+///
+class ClientWithInfo : Comp1Client {
   override PluginInfo buildPluginInfo() {
     static immutable info = parsePluginInfo(import("plugin.json"));
     return info;
