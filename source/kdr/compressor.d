@@ -5,14 +5,15 @@
 /// https://www.eecs.qmul.ac.uk/%7Ejosh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf
 module kdr.compressor;
 
+import std.algorithm : clamp, max;
 import std.math : isClose, log1p;
-
-import mir.math : exp, sqrt;
+import dplug.core;
+import mir.math : exp, sqrt, fabs;
 
 import kdr.ringbuffer;
 
 struct RmsSlidingWindow {
-  @nogc nothrow:
+@nogc nothrow:
 
   this(int frames) {
     _buffer.recalloc(frames);
@@ -26,12 +27,12 @@ struct RmsSlidingWindow {
     _buffer.enqueue(x * x);
     float sum = 0;
     foreach (sq; _buffer) {
-      sum +=  sq;
+      sum += sq;
     }
     return sqrt(sum / _buffer.length);
   }
 
- private:
+private:
   RingBuffer!float _buffer;
 }
 
@@ -52,10 +53,10 @@ enum Knee {
 }
 
 struct GainCompressor {
-  @nogc nothrow:
+@nogc nothrow:
 
   Knee kneeKind = Knee.softplus;
-  float kneeFactor = 0.5;  // Assume in [0, 1]. Smaller gets harder.
+  float kneeFactor = 0.5; // Assume in [0, 1]. Smaller gets harder.
   float upwardRatio = 1;
   float downwardRatio = 1;
   float upwardThreshold = 0;
@@ -64,9 +65,12 @@ struct GainCompressor {
 
   float compress(float x) const pure {
     final switch (kneeKind) {
-      case Knee.hard: return compressHardUp(compressHardDown(x));
-      case Knee.square: return compressSquareUp(compressSquareDown(x));
-      case Knee.softplus: return compressSoftPlusUp(compressSoftPlusDown(x));
+    case Knee.hard:
+      return compressHardUp(compressHardDown(x));
+    case Knee.square:
+      return compressSquareUp(compressSquareDown(x));
+    case Knee.softplus:
+      return compressSoftPlusUp(compressSoftPlusDown(x));
     }
   }
 
@@ -95,8 +99,10 @@ struct GainCompressor {
     float r = downwardRatio;
     float t = downwardThreshold;
     float w = kneeFactor * 50;
-    if (x < t - w / 2) return x;
-    if (t + w / 2 < x) return r * (x - t) + t;
+    if (x < t - w / 2)
+      return x;
+    if (t + w / 2 < x)
+      return r * (x - t) + t;
     return x + (r - 1) * (x - t + w / 2) ^^ 2 / (2 * w + eps);
   }
 
@@ -111,9 +117,11 @@ struct GainCompressor {
     float r = upwardRatio;
     float t = upwardThreshold;
     float w = kneeFactor * 50;
-    if (x < t - w / 2) return r * (x - t) + t;
-    if (t + w / 2 < x) return x;
-    return r * x + (1 - r) * (x - t + w/2) ^^ 2 / (2 * w + eps) + (1 - r) * t;
+    if (x < t - w / 2)
+      return r * (x - t) + t;
+    if (t + w / 2 < x)
+      return x;
+    return r * x + (1 - r) * (x - t + w / 2) ^^ 2 / (2 * w + eps) + (1 - r) * t;
   }
 
   /// This compressor has this smooth derivative around threshold t:
@@ -185,4 +193,64 @@ unittest {
   assert(comp.compressSoftPlusUp(60) > 60);
   assert(isClose(comp.compressSquareUp(60 + eps), 60));
   assert(isClose(comp.compressSoftPlusUp(60 + eps), 60));
+}
+
+struct Comp {
+public:
+@nogc nothrow:
+
+  float attackMS = 22.4;
+  float releaseMS = 282;
+  float knee = 3.0; // [0, 20]
+  float downwardRatio = 66.7;
+  float downwardThreshold = 30.2;
+  float upwardRatio;
+  float upwardThreshold;
+  bool rms = true;
+
+  void setSampleRate(float sampleRate, int numChannels) {
+    _sr = sampleRate;
+    _ema = exp(-1.0 / _sr / _emaScale);
+    _ch = numChannels;
+    _envPrev.resize(_ch);
+    _envPrev.fill(0.0);
+    _levelPrev = 0.0;
+    float a = max(attackMS * 1000, 1.0 / _sr);
+    float r = max(releaseMS * 1000, 1.0 / _sr);
+    _attack = exp(-1.0 / (_sr * a));
+    _release = exp(-1.0 / (_sr * r));
+  }
+
+  /// Returns linear gain multiplier on the multi-channel input `xs`.
+  float gain(float[] xs...) {
+    float e = env(xs);
+    float f = _levelPrev < e ? _attack : _release;
+    _levelPrev = f * _levelPrev + (1.0 - f) * e;
+    float levelDB = max(0, convertLinearGainToDecibel(_levelPrev) - downwardThreshold + knee);
+    float p = clamp(levelDB / (knee + 1e-3), 0.0, 1.0);
+    float r = 1.0 - p + p * downwardRatio;
+    return convertDecibelToLinearGain(levelDB * (1.0 - r) / r);
+  }
+
+private:
+  // TODO: RMS mode.
+  float env(float[] xs) {
+    float y = -float.infinity;
+    foreach (i, x; xs) {
+      x = rms ? x * x : fabs(x);
+      _envPrev[i] = x * (1.0 - _ema) + _envPrev[i] * _ema;
+      if (rms) {
+        _envPrev[i] = sqrt(_envPrev[i]);
+      }
+      y = max(_envPrev[i], y);
+    }
+    return y;
+  }
+
+  float _sr = 44_100;
+  float _emaScale = 0.1;
+  float _ema;
+  float _attack, _release, _levelPrev;
+  int _ch = 2;
+  Vec!float _envPrev;
 }
