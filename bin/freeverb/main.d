@@ -3,6 +3,7 @@ import std.algorithm;
 import dplug.core;
 import dplug.client;
 import kdr.ringbuffer;
+import kdr.compat;
 
 struct AllPassFilter {
   /// Returns: the filtered output.
@@ -41,6 +42,7 @@ class FreeverbClient : Client {
   this() {}
 
   override PluginInfo buildPluginInfo() {
+    forceCompatLink();
     static immutable info = parsePluginInfo(import("plugin.json"));
     return info;
   }
