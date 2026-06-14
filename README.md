@@ -68,6 +68,10 @@ Envelope shaping effect for tremolo sidechain like kickstart or LFO tools.
 
 TBA
 
+## Hott
+
+Yet another OTT clone
+
 ## History
 
 - 29 Dec 2022: Add envtool
