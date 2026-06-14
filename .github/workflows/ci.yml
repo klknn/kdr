@@ -87,7 +87,7 @@ jobs:
         7z a ${{ matrix.os }}-${{ matrix.plugin }}.zip ./bin/${{ matrix.plugin }}/builds
 
     - name: Upload
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-${{ matrix.plugin }}
         path: ${{ matrix.os }}-${{ matrix.plugin }}.zip
