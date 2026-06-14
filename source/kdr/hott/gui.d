@@ -144,9 +144,19 @@ public:
         int tabBtnW = 18;
         int tabBtnH = 14;
         int tabGap = 2;
-        int tabX = position.width - 60 - pad;
-        int tabY = position.height - pad - tabBtnH;
+        int meterW = getMeterWidth();
+        int attRelX = pad + meterW + 4;
+        int tabX = attRelX + 4;
 
+        int h = position.height;
+        int bandH = (h - pad * 5 - tabBtnH) / 3;
+        int tabY = pad + 3 * (bandH + pad);
+
+        float S = position.width / 400.0f;
+        int contentW = position.width - cast(int)(50 * S);
+        if (x >= contentW) return Click.unhandled;
+
+        // Check TBA click
         for (int t = 0; t < 3; ++t) {
             int tx = tabX + t * (tabBtnW + tabGap);
             if (x >= tx && x < tx + tabBtnW && y >= tabY && y < tabY + tabBtnH) {
@@ -156,12 +166,31 @@ public:
             }
         }
 
-        int h = position.height;
-        int bandAreaH = h - pad * 2 - 18;
-        int bandH = (bandAreaH - pad * 2) / 3;
+        // Check Knee click
+        int kneeX = pad;
+        int kneeW = 32;
+        if (x >= kneeX && x < kneeX + kneeW && y >= tabY && y < tabY + tabBtnH) {
+            auto p = cast(BoolParameter) _params[Params.softKnee];
+            p.beginParamEdit();
+            p.setFromGUI(!p.value());
+            p.endParamEdit();
+            setDirtyWhole();
+            return Click.handled;
+        }
 
-        int meterW = getMeterWidth();
-        int attRelX = pad + meterW + 4;
+        // Check RMS click
+        int rmsX = kneeX + kneeW + 4;
+        int rmsW = 32;
+        if (x >= rmsX && x < rmsX + rmsW && y >= tabY && y < tabY + tabBtnH) {
+            auto p = cast(BoolParameter) _params[Params.rmsMode];
+            p.beginParamEdit();
+            p.setFromGUI(!p.value());
+            p.endParamEdit();
+            setDirtyWhole();
+            return Click.handled;
+        }
+
+        int bandAreaH = pad + 3 * (bandH + pad) - pad;
 
         for (int b = 0; b < 3; ++b) {
             int by = pad + b * (bandH + pad);
@@ -263,15 +292,17 @@ public:
             _canvas.fillStyle = grad;
             _canvas.fillRect(0, 0, position.width, position.height);
 
-            int w = position.width;
+            float S = position.width / 400.0f;
+            int contentW = position.width - cast(int)(50 * S);
+            int w = contentW;
             int h = position.height;
             int pad = 6;
-            int tabAreaW = 60;
             int attRelW = 70;
             int meterW = getMeterWidth();
-            int tabH = 18;
-            int bandAreaH = h - pad - tabH;
-            int bandH = (bandAreaH - pad * 2) / 3;
+            int tabBtnH = 14;
+            int bandH = (h - pad * 5 - tabBtnH) / 3;
+            int bandAreaH = pad + 3 * (bandH + pad) - pad;
+            int tabY = bandAreaH + pad;
 
             // Draw grid lines
             _canvas.fillStyle = gridColor;
@@ -340,10 +371,9 @@ public:
             }
 
             // Draw Tab buttons background
-            int tabX = w - tabAreaW - pad;
-            int tabY = bandAreaH + 2;
+            int attRelX = pad + meterW + 4;
+            int tabX = attRelX + 4;
             int tabBtnW = 18;
-            int tabBtnH = 14;
             int tabGap = 2;
 
             for (int t = 0; t < 3; ++t) {
@@ -352,6 +382,19 @@ public:
                 _canvas.fillStyle = active ? lineColor : RGBA(155, 255, 255, 20);
                 _canvas.fillRect(tx, tabY, tabBtnW, tabBtnH);
             }
+
+            // Draw Knee and RMS buttons background (aligned left)
+            int kneeX = pad;
+            int kneeW = 32;
+            bool kneeActive = (getParamValue(Params.softKnee) > 0.5f);
+            _canvas.fillStyle = kneeActive ? lineColor : RGBA(155, 255, 255, 20);
+            _canvas.fillRect(kneeX, tabY, kneeW, tabBtnH);
+
+            int rmsX = kneeX + kneeW + 4;
+            int rmsW = 32;
+            bool rmsActive = (getParamValue(Params.rmsMode) > 0.5f);
+            _canvas.fillStyle = rmsActive ? lineColor : RGBA(155, 255, 255, 20);
+            _canvas.fillRect(rmsX, tabY, rmsW, tabBtnH);
         }
     }
 
@@ -370,9 +413,10 @@ public:
 
     int getMeterWidth() {
         int pad = 6;
-        int tabAreaW = 60;
         int attRelW = 70;
-        return position.width - pad * 2 - attRelW - 4 - tabAreaW;
+        float S = position.width / 400.0f;
+        int contentW = position.width - cast(int)(50 * S);
+        return contentW - pad * 2 - attRelW - 4;
     }
 
 private:
@@ -454,8 +498,7 @@ public:
         logDebug("Initialize %s", __FUNCTION__.ptr);
 
         static immutable float[] ratios = [1.0f, 1.25f, 1.5f, 1.75f, 2.0f];
-        // Expanded width to 780px to accommodate the sub-pane next to main controls
-        super(makeSizeConstraintsDiscrete(780, 580, ratios));
+        super(makeSizeConstraintsDiscrete(400, 580, ratios));
 
         _client = client;
         _params = params;
@@ -463,7 +506,7 @@ public:
 
         addChild(_resizer = mallocNew!UIWindowResizer(context()));
 
-        // Left Pane Title
+        // Title
         _title = buildLabel("kdr hott");
         _date = buildLabel("" ~ __DATE__ ~ "" ~ __TIME__);
 
@@ -472,10 +515,10 @@ public:
         _labelAmount = buildLabel("AMOUNT");
         _knobTime = buildKnob(Params.time);
         _labelTime = buildLabel("TIME");
+        _knobInput = buildKnob(Params.input);
+        _labelInput = buildLabel("IN GAIN");
         _knobOutput = buildKnob(Params.output);
         _labelOutput = buildLabel("OUT GAIN");
-        _knobLowXover = buildKnob(Params.lowXover);
-        _labelLowXover = buildLabel("LOW XOVER");
 
         // Display
         addChild(_display = mallocNew!HottDisplayUI(context(), _client, params));
@@ -494,7 +537,7 @@ public:
             _labelValBottom[b] = buildLabel("");
         }
 
-        // Right side knobs of left panel (H Out, M Out, L Out)
+        // Right side knobs of display (H Out, M Out, L Out)
         _knobHighOut = buildKnob(Params.highOut);
         _labelHighOut = buildLabel("H OUT");
         _knobMidOut = buildKnob(Params.midOut);
@@ -502,47 +545,19 @@ public:
         _knobLowOut = buildKnob(Params.lowOut);
         _labelLowOut = buildLabel("L OUT");
 
-        // Bottom knobs/toggles of left panel
-        _knobHighXover = buildKnob(Params.highXover);
-        _labelHighXover = buildLabel("HIGH XOVER");
-
-        _switchSoftKnee = mallocNew!UIOnOffSwitch(context(), cast(BoolParameter) _params[Params.softKnee]);
-        addChild(_switchSoftKnee);
         _labelSoftKnee = buildLabel("KNEE");
-
-        _switchRmsMode = mallocNew!UIOnOffSwitch(context(), cast(BoolParameter) _params[Params.rmsMode]);
-        addChild(_switchRmsMode);
         _labelRmsMode = buildLabel("RMS");
 
-        // Sub-pane on the right (detailed controls)
-        addChild(_subPaneBackground = mallocNew!HottSubPaneBackgroundUI(context()));
-        _labelSubPaneTitle = buildLabel("DETAILED BAND CONTROLS");
+        // Bottom knobs
+        _knobGlobalUpward = buildKnob(Params.globalUpward);
+        _labelGlobalUpward = buildLabel("UPWARD");
+        _knobGlobalDownward = buildKnob(Params.globalDownward);
+        _labelGlobalDownward = buildLabel("DOWNWARD");
+        _knobLowXover = buildKnob(Params.lowXover);
+        _labelLowXover = buildLabel("L XOVER");
+        _knobHighXover = buildKnob(Params.highXover);
+        _labelHighXover = buildLabel("H XOVER");
 
-        // Sub-pane headers
-        _labelHeaderAtt = buildLabel("ATTACK");
-        _labelHeaderRel = buildLabel("RELEASE");
-        _labelHeaderUpTh = buildLabel("UP TH");
-        _labelHeaderUpRt = buildLabel("UP RT");
-        _labelHeaderDnTh = buildLabel("DN TH");
-        _labelHeaderDnRt = buildLabel("DN RT");
-
-        // Sub-pane rows labels
-        _labelRowHigh = buildLabel("HIGH");
-        _labelRowMid = buildLabel("MID");
-        _labelRowLow = buildLabel("LOW");
-
-        // 18 Detailed knobs in the grid
-        // GUI display order: High = 0 (Params index + 2), Mid = 1 (Params index + 1), Low = 2 (Params index + 0)
-        // DSP order: Low = 0, Mid = 1, High = 2
-        for (int b = 0; b < 3; ++b) {
-            int dspB = 2 - b;
-            _knobAttack[b] = buildKnob(cast(Params)(Params.lowAttack + dspB));
-            _knobRelease[b] = buildKnob(cast(Params)(Params.lowRelease + dspB));
-            _knobUpThresh[b] = buildKnob(cast(Params)(Params.lowUpThresh + dspB));
-            _knobUpRatio[b] = buildKnob(cast(Params)(Params.lowUpRatio + dspB));
-            _knobDownThresh[b] = buildKnob(cast(Params)(Params.lowDownThresh + dspB));
-            _knobDownRatio[b] = buildKnob(cast(Params)(Params.lowDownRatio + dspB));
-        }
         updateDisplayLabels();
     }
 
@@ -555,21 +570,17 @@ public:
         const int W = position.width;
         const float S = W / cast(float)(context.getDefaultUIWidth());
 
-        // We split the window: Left panel is W_left = 400 * S, Right panel is W_right = 380 * S
-        int leftW = cast(int)(400 * S);
-        int rightW = W - leftW;
-
-        // --- Left Panel Layout ---
         int headerY = 10;
         _title.position = rect(0, headerY, 250, 40);
         _title.textSize = 40 * S;
         _date.position = rect(250, headerY, 150, 15);
         _date.textSize = 15 * S;
 
-        // Top knobs (left panel)
+        // Top knobs: AMOUNT TIME IN-GAIN OUT-GAIN
         int knobSize = 100;
         int knobLabelSize = 12;
         int knobY = 50;
+        
         _knobAmount.position = rect(0, knobY, knobSize, knobSize);
         _labelAmount.position = rect(0, knobY + knobSize, knobSize, knobLabelSize);
         _labelAmount.textSize = knobLabelSize * S;
@@ -578,35 +589,38 @@ public:
         _labelTime.position = rect(knobSize, knobY + knobSize, knobSize, knobLabelSize);
         _labelTime.textSize = knobLabelSize * S;
 
-        _knobOutput.position = rect(knobSize * 2, knobY, knobSize, knobSize);
-        _labelOutput.position = rect(knobSize * 2, knobY + knobSize, knobSize, knobLabelSize);
-        _labelOutput.textSize = knobLabelSize * S;
+        _knobInput.position = rect(knobSize * 2, knobY, knobSize, knobSize);
+        _labelInput.position = rect(knobSize * 2, knobY + knobSize, knobSize, knobLabelSize);
+        _labelInput.textSize = knobLabelSize * S;
 
-        _knobLowXover.position = rect(knobSize * 3, knobY, knobSize, knobSize);
-        _labelLowXover.position = rect(knobSize * 3, knobY + knobSize, knobSize, knobLabelSize);
-        _labelLowXover.textSize = knobLabelSize * S;
+        _knobOutput.position = rect(knobSize * 3, knobY, knobSize, knobSize);
+        _labelOutput.position = rect(knobSize * 3, knobY + knobSize, knobSize, knobLabelSize);
+        _labelOutput.textSize = knobLabelSize * S;
 
         // Multi-band Display
         int compHeight = 70;
-        int compWidth = 350;
+        int compWidth = 400;
         int compKnobSize = 50;
         _display.position = rect(0, 200, compWidth, compHeight * 3 + 10 * 2);
 
-        // Position TBA Tab labels and Band/Value labels
+        // Position TBA Tab labels and Band/Value/Knee/RMS labels
         {
             int dispX = 0;
             int dispY = 200;
-            int dispW = 350;
+            int dispW = 400;
             int dispH = 230;
 
             int pad = 6;
-            int tabAreaW = 60;
             int attRelW = 70;
-            int bandAreaH = dispH - pad - 18;
-            int bandH = (bandAreaH - pad * 2) / 3;
+            int tabBtnH = 14;
+            int bandH = (dispH - pad * 5 - tabBtnH) / 3;
+            int bandAreaH = pad + 3 * (bandH + pad) - pad;
+            int tabY = bandAreaH + pad;
 
-            int tabX = dispW - tabAreaW - pad;
-            int tabY = bandAreaH + 2;
+            int contentW = dispW - 50;
+            int meterW = contentW - pad * 2 - attRelW - 4;
+            int attRelX = pad + meterW + 4;
+            int tabX = attRelX + 4;
             int tabBtnW = 18;
             int tabGap = 2;
 
@@ -617,8 +631,13 @@ public:
             _labelTabA.position = rect(dispX + tabX + 2 * (tabBtnW + tabGap) + 4, dispY + tabY + 1, 10, 12);
             _labelTabA.textSize = 9 * S;
 
-            int meterW = dispW - pad * 2 - attRelW - 4 - tabAreaW;
-            int attRelX = pad + meterW + 4;
+            int kneeX = pad;
+            _labelSoftKnee.position = rect(dispX + kneeX + 2, dispY + tabY + 1, 28, 12);
+            _labelSoftKnee.textSize = 9 * S;
+
+            int rmsX = kneeX + 32 + 4;
+            _labelRmsMode.position = rect(dispX + rmsX + 4, dispY + tabY + 1, 24, 12);
+            _labelRmsMode.textSize = 9 * S;
 
             for (int b = 0; b < 3; ++b) {
                 int y = pad + b * (bandH + pad);
@@ -634,7 +653,7 @@ public:
             }
         }
 
-        // Right side knobs of left panel (H OUT, M OUT, L OUT)
+        // Right side knobs of display (H OUT, M OUT, L OUT)
         int compKnobY = 200;
         _knobHighOut.position = rect(350, compKnobY, compKnobSize, compKnobSize);
         _labelHighOut.position = rect(350, compKnobY + compKnobSize, compKnobSize, 15);
@@ -650,69 +669,24 @@ public:
         _labelLowOut.position = rect(350, compKnobY + compKnobSize, compKnobSize, 15);
         _labelLowOut.textSize = 8 * S;
 
-        // Bottom knobs / switches of left panel
+        // Bottom knobs: UPWARD DOWNWARD L-XOVER H-XOVER
         int bottomKnobY = compKnobY + compKnobSize + 30;
-        _knobHighXover.position = rect(0, bottomKnobY, knobSize, knobSize);
-        _labelHighXover.position = rect(0, bottomKnobY + knobSize, knobSize, 15);
+        
+        _knobGlobalUpward.position = rect(0, bottomKnobY, knobSize, knobSize);
+        _labelGlobalUpward.position = rect(0, bottomKnobY + knobSize, knobSize, knobLabelSize);
+        _labelGlobalUpward.textSize = knobLabelSize * S;
+
+        _knobGlobalDownward.position = rect(knobSize, bottomKnobY, knobSize, knobSize);
+        _labelGlobalDownward.position = rect(knobSize, bottomKnobY + knobSize, knobSize, knobLabelSize);
+        _labelGlobalDownward.textSize = knobLabelSize * S;
+
+        _knobLowXover.position = rect(knobSize * 2, bottomKnobY, knobSize, knobSize);
+        _labelLowXover.position = rect(knobSize * 2, bottomKnobY + knobSize, knobSize, knobLabelSize);
+        _labelLowXover.textSize = knobLabelSize * S;
+
+        _knobHighXover.position = rect(knobSize * 3, bottomKnobY, knobSize, knobSize);
+        _labelHighXover.position = rect(knobSize * 3, bottomKnobY + knobSize, knobSize, knobLabelSize);
         _labelHighXover.textSize = knobLabelSize * S;
-
-        _switchSoftKnee.position = rect(knobSize + 25, bottomKnobY + 10, 50, 20);
-        _labelSoftKnee.position = rect(knobSize + 25, bottomKnobY + knobSize, 50, 15);
-        _labelSoftKnee.textSize = knobLabelSize * S;
-
-        _switchRmsMode.position = rect(knobSize * 2 + 25, bottomKnobY + 10, 50, 20);
-        _labelRmsMode.position = rect(knobSize * 2 + 25, bottomKnobY + knobSize, 50, 15);
-        _labelRmsMode.textSize = knobLabelSize * S;
-
-        // --- Right Sub-Pane Layout ---
-        int paneX = 405; // starts slightly after left panel
-        _subPaneBackground.position = rect(400, 0, 380, 580);
-
-        _labelSubPaneTitle.position = rect(paneX, headerY, 350, 20);
-        _labelSubPaneTitle.textSize = 18 * S;
-
-        // Column headers position
-        int subKnobSize = 48;
-        int colGap = 8;
-        int rowGap = 20;
-
-        int headersY = 50;
-        _labelHeaderAtt.position = rect(paneX + 50, headersY, subKnobSize, 15);
-        _labelHeaderAtt.textSize = 8 * S;
-        _labelHeaderRel.position = rect(paneX + 50 + (subKnobSize + colGap), headersY, subKnobSize, 15);
-        _labelHeaderRel.textSize = 8 * S;
-        _labelHeaderUpTh.position = rect(paneX + 50 + (subKnobSize + colGap) * 2, headersY, subKnobSize, 15);
-        _labelHeaderUpTh.textSize = 8 * S;
-        _labelHeaderUpRt.position = rect(paneX + 50 + (subKnobSize + colGap) * 3, headersY, subKnobSize, 15);
-        _labelHeaderUpRt.textSize = 8 * S;
-        _labelHeaderDnTh.position = rect(paneX + 50 + (subKnobSize + colGap) * 4, headersY, subKnobSize, 15);
-        _labelHeaderDnTh.textSize = 8 * S;
-        _labelHeaderDnRt.position = rect(paneX + 50 + (subKnobSize + colGap) * 5, headersY, subKnobSize, 15);
-        _labelHeaderDnRt.textSize = 8 * S;
-
-        // Rows for HIGH (0), MID (1), LOW (2)
-        int curRowY = 80;
-        for (int b = 0; b < 3; ++b) {
-            // Row Label
-            UILabel rowLab = (b == 0) ? _labelRowHigh : ((b == 1) ? _labelRowMid : _labelRowLow);
-            rowLab.position = rect(paneX, curRowY + subKnobSize / 2 - 8, 40, 16);
-            rowLab.textSize = 12 * S;
-
-            int curX = paneX + 50;
-            _knobAttack[b].position = rect(curX, curRowY, subKnobSize, subKnobSize);
-            curX += subKnobSize + colGap;
-            _knobRelease[b].position = rect(curX, curRowY, subKnobSize, subKnobSize);
-            curX += subKnobSize + colGap;
-            _knobUpThresh[b].position = rect(curX, curRowY, subKnobSize, subKnobSize);
-            curX += subKnobSize + colGap;
-            _knobUpRatio[b].position = rect(curX, curRowY, subKnobSize, subKnobSize);
-            curX += subKnobSize + colGap;
-            _knobDownThresh[b].position = rect(curX, curRowY, subKnobSize, subKnobSize);
-            curX += subKnobSize + colGap;
-            _knobDownRatio[b].position = rect(curX, curRowY, subKnobSize, subKnobSize);
-
-            curRowY += subKnobSize + rowGap;
-        }
 
         // Resizer at bottom right
         int hintSize = 20;
@@ -778,6 +752,14 @@ private:
         _labelTabB.textSize = 9 * S;
         _labelTabA.textSize = 9 * S;
 
+        bool kneeActive = _display.getParamValue(Params.softKnee) > 0.5f;
+        _labelSoftKnee.textColor = kneeActive ? RGBA(0, 0, 0, 255) : RGBA(187, 187, 187, 0);
+        _labelSoftKnee.textSize = 9 * S;
+
+        bool rmsActive = _display.getParamValue(Params.rmsMode) > 0.5f;
+        _labelRmsMode.textColor = rmsActive ? RGBA(0, 0, 0, 255) : RGBA(187, 187, 187, 0);
+        _labelRmsMode.textSize = 9 * S;
+
         for (int b = 0; b < 3; ++b) {
             int dspB = 2 - b;
             _labelBandName[b].textColor = RGBA(255, 255, 255, 100);
@@ -813,11 +795,11 @@ private:
     IHottClient _client;
     Parameter[] _params;
     Font _font;
-    UILabel _title, _date, _labelAmount, _labelTime, _labelOutput, _labelLowXover,
+    UILabel _title, _date, _labelAmount, _labelTime, _labelOutput, _labelInput,
             _labelHighOut, _labelMidOut, _labelLowOut,
-            _labelHighXover, _labelSoftKnee, _labelRmsMode,
-            _labelSubPaneTitle, _labelHeaderAtt, _labelHeaderRel, _labelHeaderUpTh, _labelHeaderUpRt, _labelHeaderDnTh, _labelHeaderDnRt,
-            _labelRowHigh, _labelRowMid, _labelRowLow;
+            _labelSoftKnee, _labelRmsMode,
+            _labelGlobalUpward, _labelGlobalDownward,
+            _labelLowXover, _labelHighXover;
 
     // TBA Display Labels
     UILabel _labelTabT, _labelTabB, _labelTabA;
@@ -829,18 +811,9 @@ private:
     char[32][3] _valBottomBuf;
 
     UIWindowResizer _resizer;
-    UIKnob _knobAmount, _knobTime, _knobOutput, _knobLowXover,
+    UIKnob _knobAmount, _knobTime, _knobOutput, _knobInput,
            _knobHighOut, _knobMidOut, _knobLowOut,
-           _knobHighXover;
-    UIOnOffSwitch _switchSoftKnee, _switchRmsMode;
+           _knobGlobalUpward, _knobGlobalDownward,
+           _knobLowXover, _knobHighXover;
     HottDisplayUI _display;
-
-    // Sub-pane components
-    HottSubPaneBackgroundUI _subPaneBackground;
-    UIKnob[3] _knobAttack;
-    UIKnob[3] _knobRelease;
-    UIKnob[3] _knobUpThresh;
-    UIKnob[3] _knobUpRatio;
-    UIKnob[3] _knobDownThresh;
-    UIKnob[3] _knobDownRatio;
 }

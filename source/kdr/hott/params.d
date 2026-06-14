@@ -39,6 +39,9 @@ enum Params {
     lowIn = 29,
     midIn = 30,
     highIn = 31,
+    input = 32,
+    globalUpward = 33,
+    globalDownward = 34,
 }
 
 struct ParamBuilder {
@@ -139,5 +142,14 @@ struct ParamBuilder {
     }
     static auto highIn() {
         return mallocNew!LinearFloatParameter(Params.highIn, "HighIn", "", 0.0f, 1.0f, 0.608f);
+    }
+    static auto input() {
+        return mallocNew!LinearFloatParameter(Params.input, "Input", "", 0.0f, 1.0f, 0.5f);
+    }
+    static auto globalUpward() {
+        return mallocNew!LinearFloatParameter(Params.globalUpward, "GlobalUpward", "", 0.0f, 1.0f, 1.0f);
+    }
+    static auto globalDownward() {
+        return mallocNew!LinearFloatParameter(Params.globalDownward, "GlobalDownward", "", 0.0f, 1.0f, 1.0f);
     }
 }

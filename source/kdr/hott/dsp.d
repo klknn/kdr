@@ -220,6 +220,7 @@ struct HottDSP {
 
     float amount = 1.0f; // dry/wet
     float timeMult = 1.0f; // time constant multiplier
+    float globalInputDb = 0.0f;
     float globalOutputDb = 0.0f;
 
     float[3] bandInLin = [1.0f, 1.0f, 1.0f];
@@ -249,11 +250,12 @@ struct HottDSP {
     }
 
     void process(const(float*)[] inputs, float*[] outputs, int frames, float sampleRate) {
+        float globalInLin = pow(10.0f, globalInputDb / 20.0f);
         float globalOutLin = pow(10.0f, globalOutputDb / 20.0f);
 
         for (int i = 0; i < frames; ++i) {
-            float inL = inputs[0][i];
-            float inR = inputs[1][i];
+            float inL = inputs[0][i] * globalInLin;
+            float inR = inputs[1][i] * globalInLin;
 
             // 1. Crossover splits
             float lpL, lpR, hpL, hpR;

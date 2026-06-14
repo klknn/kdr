@@ -71,7 +71,11 @@ public:
         _dsp.timeMult = timeParam * 2.0f;
         if (_dsp.timeMult < 0.01f) _dsp.timeMult = 0.01f;
 
+        _dsp.globalInputDb = readParam!float(Params.input) * 48.0f - 24.0f;
         _dsp.globalOutputDb = readParam!float(Params.output) * 48.0f - 24.0f;
+
+        float globalUp = readParam!float(Params.globalUpward);
+        float globalDown = readParam!float(Params.globalDownward);
 
         bool softKnee = readParam!bool(Params.softKnee);
         bool rmsMode = readParam!bool(Params.rmsMode);
@@ -87,8 +91,8 @@ public:
             _dsp.bands[b].thresholdDb = readParam!float(cast(Params)(Params.lowDownThresh + b)) * 60.0f - 60.0f;
             _dsp.bands[b].upThresholdDb = readParam!float(cast(Params)(Params.lowUpThresh + b)) * 72.0f - 60.0f;
 
-            _dsp.bands[b].ratio = normToRatio(readParam!float(cast(Params)(Params.lowDownRatio + b)));
-            _dsp.bands[b].upRatio = normToRatio(readParam!float(cast(Params)(Params.lowUpRatio + b)));
+            _dsp.bands[b].ratio = normToRatio(readParam!float(cast(Params)(Params.lowDownRatio + b)) * globalDown);
+            _dsp.bands[b].upRatio = normToRatio(readParam!float(cast(Params)(Params.lowUpRatio + b)) * globalUp);
 
             _dsp.bands[b].attackMs = normToAttack(readParam!float(cast(Params)(Params.lowAttack + b))) * _dsp.timeMult;
             _dsp.bands[b].releaseMs = normToRelease(readParam!float(cast(Params)(Params.lowRelease + b))) * _dsp.timeMult;
