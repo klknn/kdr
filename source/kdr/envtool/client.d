@@ -78,9 +78,10 @@ class EnvToolClient : Client {
         float output = inputs[c][t];
 
         if (info.hostIsPlaying) {
-          // Do envelope modutation.
           const double beats = (info.timeInSamples + t) * beatPerSample;
-          const float e = env.getY((beats / beatScale + offset) % 1.0);
+          double phase = (beats / beatScale + offset) % 1.0;
+          if (phase < 0) phase += 1.0;
+          const float e = env.getY(clamp(phase, 0.0, 1.0));
 
           final switch (dst) {
             case Destination.volume:
@@ -125,3 +126,15 @@ nothrow unittest {
   assert(outputs[0] == inputs);
   assert(outputs[1] == inputs);
 }
+
+// Reproduce crash when playback position is negative or jumps.
+nothrow unittest {
+  auto client = new EnvToolClient;
+  client.reset(44100.0, 32, 2, 2);
+  TimeInfo info = {tempo: 120, timeInSamples: -10, hostIsPlaying: true};
+  float[] inputs = [1, 2, 3, 4];
+  float[][] outputs = new float[][](2, inputs.length);
+  client.processAudio([&inputs[0], &inputs[0]], [&outputs[0][0], &outputs[1][0]],
+                      cast(int) inputs.length, info);
+}
+
