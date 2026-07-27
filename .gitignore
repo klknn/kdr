@@ -9,6 +9,7 @@
 !*.py
 !*.bzl
 !*.sh
+!*.webp
 !BUILD
 !WORKSPACE
 !.gitignore
