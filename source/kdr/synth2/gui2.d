@@ -7,7 +7,7 @@ License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 module kdr.synth2.gui2;
 
 import core.stdc.stdio : snprintf;
-import mir.math : sin, PI;
+import mir.math : cos, sin, PI;
 
 import dplug.canvas : Canvas;
 import dplug.client.params : BoolParameter, FloatParameter, IntegerParameter,
@@ -18,7 +18,7 @@ import dplug.graphics : Font, ImageRef, L16, RGBA, cropImageRef, fillAll;
 import dplug.gui : Click, GUIGraphics, MouseState, UIContext, UIElement,
   flagAnimated, flagPBR, flagRaw;
 import dplug.math : box2i, rectangle;
-import dplug.pbrwidgets : KnobStyle, UILabel, UIKnob, UIOnOffSwitch;
+import dplug.pbrwidgets : UILabel, UIOnOffSwitch;
 
 import kdr.filter : FilterKind;
 import kdr.synth2.params : Params;
@@ -30,16 +30,16 @@ private enum int baseWidth = 960;
 private enum int baseHeight = 600;
 private enum int headerHeight = 54;
 
-private enum RGBA bg = RGBA(9, 13, 20, 0);
-private enum RGBA headerBg = RGBA(15, 21, 31, 0);
-private enum RGBA cardBg = RGBA(20, 28, 39, 0);
-private enum RGBA cardEdge = RGBA(45, 61, 78, 0);
-private enum RGBA textPrimary = RGBA(224, 235, 242, 0);
-private enum RGBA textMuted = RGBA(120, 145, 160, 0);
-private enum RGBA cyan = RGBA(47, 211, 227, 100);
-private enum RGBA cyanBright = RGBA(89, 236, 245, 0);
-private enum RGBA orange = RGBA(255, 151, 49, 100);
-private enum RGBA magenta = RGBA(230, 82, 158, 100);
+private enum RGBA bg = RGBA(218, 224, 228, 0);
+private enum RGBA headerBg = RGBA(247, 249, 250, 0);
+private enum RGBA cardBg = RGBA(244, 247, 249, 0);
+private enum RGBA cardEdge = RGBA(184, 195, 202, 0);
+private enum RGBA textPrimary = RGBA(30, 42, 50, 0);
+private enum RGBA textMuted = RGBA(77, 94, 104, 0);
+private enum RGBA cyan = RGBA(0, 151, 174, 100);
+private enum RGBA cyanBright = RGBA(0, 151, 174, 0);
+private enum RGBA orange = RGBA(231, 119, 32, 100);
+private enum RGBA magenta = RGBA(202, 62, 124, 100);
 
 private enum Page : int { synth, mod, fx }
 
@@ -69,7 +69,7 @@ private class PageTabUI : UIElement {
                           ImageRef!RGBA materialMap, box2i[] dirtyRects) {
     const active = _host.activePage == _page;
     foreach (rect; dirtyRects) {
-      diffuseMap.cropImageRef(rect).fillAll(active ? RGBA(27, 43, 57, 0)
+      diffuseMap.cropImageRef(rect).fillAll(active ? RGBA(218, 235, 239, 0)
                                                     : headerBg);
       depthMap.cropImageRef(rect).fillAll(L16(0));
       materialMap.cropImageRef(rect).fillAll(RGBA(0, 0, 0, 0));
@@ -85,6 +85,102 @@ private class PageTabUI : UIElement {
  private:
   IPageHost _host;
   Page _page;
+}
+
+/// Flat 2D knob with a high-contrast value arc. This avoids PBR lighting and
+/// stays legible at every supported UI scale.
+private class FlatKnobUI : UIElement, IParameterListener {
+ public:
+  nothrow @nogc:
+
+  this(UIContext context, Parameter param) {
+    super(context, flagRaw);
+    _param = param;
+    _param.addListener(this);
+  }
+
+  ~this() { _param.removeListener(this); }
+
+  override Click onMouseClick(int, int, int, bool isDoubleClick, MouseState) {
+    if (isDoubleClick) {
+      _param.beginParamEdit();
+      setNormalized(cast(float)_param.getNormalizedDefault());
+      _param.endParamEdit();
+      return Click.handled;
+    }
+    _dragValue = cast(float)_param.getNormalized();
+    _param.beginParamEdit();
+    _editing = true;
+    return Click.startDrag;
+  }
+
+  override void onMouseDrag(int, int, int dx, int dy, MouseState) {
+    _dragValue += (dx - dy) * 0.006f;
+    if (_dragValue < 0) _dragValue = 0;
+    if (_dragValue > 1) _dragValue = 1;
+    setNormalized(_dragValue);
+  }
+
+  override void onStopDrag() {
+    if (_editing) {
+      _param.endParamEdit();
+      _editing = false;
+    }
+  }
+
+  override void onDrawRaw(ImageRef!RGBA rawMap, box2i[] dirtyRects) {
+    const float cx = position.width * 0.5f;
+    const float cy = position.height * 0.5f;
+    const float radius = (position.width < position.height ? position.width
+                                                           : position.height) * 0.32f;
+    const float value = cast(float)_param.getNormalized();
+    foreach (rect; dirtyRects) {
+      auto cropped = rawMap.cropImageRef(rect);
+      _canvas.initialize(cropped);
+      _canvas.translate(-rect.min.x, -rect.min.y);
+      _canvas.fillStyle = RGBA(0, 0, 0, 0);
+      _canvas.fillRect(0, 0, position.width, position.height);
+
+      _canvas.fillStyle = RGBA(151, 164, 172, 255);
+      foreach (i; 0 .. 35) {
+        const float angle = -PI * 0.75f + PI * 1.5f * i / 34f;
+        _canvas.fillCircle(cx + cos(angle) * radius,
+                           cy + sin(angle) * radius, 1.4f);
+      }
+      _canvas.fillStyle = RGBA(0, 151, 174, 255);
+      const int litPoints = cast(int)(value * 34f + 0.5f);
+      foreach (i; 0 .. litPoints + 1) {
+        const float angle = -PI * 0.75f + PI * 1.5f * i / 34f;
+        _canvas.fillCircle(cx + cos(angle) * radius,
+                           cy + sin(angle) * radius, 2.0f);
+      }
+
+      _canvas.fillStyle = isMouseOver ? RGBA(255, 255, 255, 255)
+                                      : RGBA(235, 239, 241, 255);
+      _canvas.fillCircle(cx, cy, radius - 4);
+      _canvas.fillStyle = RGBA(71, 86, 95, 255);
+      const float indicator = -PI * 0.75f + PI * 1.5f * value;
+      _canvas.fillCircle(cx + cos(indicator) * (radius - 8),
+                         cy + sin(indicator) * (radius - 8), 2.2f);
+    }
+  }
+
+  override void onParameterChanged(Parameter) { setDirtyWhole(); }
+  override void onBeginParameterEdit(Parameter) {}
+  override void onEndParameterEdit(Parameter) {}
+  override void onBeginParameterHover(Parameter) {}
+  override void onEndParameterHover(Parameter) {}
+
+ private:
+  void setNormalized(float value) {
+    if (auto fp = cast(FloatParameter)_param) fp.setFromGUINormalized(value);
+    else if (auto ip = cast(IntegerParameter)_param) ip.setFromGUINormalized(value);
+  }
+
+  Canvas _canvas;
+  Parameter _param;
+  float _dragValue;
+  bool _editing;
 }
 
 /// Compact discrete selector. Clicking advances to the next parameter value.
@@ -127,10 +223,10 @@ private class SelectorUI : UIElement, IParameterListener {
   override void onDrawPBR(ImageRef!RGBA diffuseMap, ImageRef!L16 depthMap,
                           ImageRef!RGBA materialMap, box2i[] dirtyRects) {
     foreach (rect; dirtyRects) {
-      diffuseMap.cropImageRef(rect).fillAll(isMouseOver ? RGBA(40, 62, 75, 0)
-                                                         : RGBA(29, 42, 54, 0));
+      diffuseMap.cropImageRef(rect).fillAll(isMouseOver ? RGBA(218, 231, 235, 0)
+                                                         : RGBA(231, 237, 240, 0));
       depthMap.cropImageRef(rect).fillAll(L16(5000));
-      materialMap.cropImageRef(rect).fillAll(RGBA(40, 20, 80, 0));
+      materialMap.cropImageRef(rect).fillAll(RGBA(220, 10, 30, 0));
     }
   }
 
@@ -180,7 +276,7 @@ private class ScopeUI : UIElement, IParameterListener {
       auto cropped = rawMap.cropImageRef(rect);
       _canvas.initialize(cropped);
       _canvas.translate(-rect.min.x, -rect.min.y);
-      _canvas.fillStyle = RGBA(8, 19, 28, 245);
+      _canvas.fillStyle = RGBA(250, 252, 253, 250);
       _canvas.fillRect(0, 0, position.width, position.height);
       drawGrid();
       final switch (_kind) {
@@ -189,7 +285,7 @@ private class ScopeUI : UIElement, IParameterListener {
         case Kind.filter: drawFilter(); break;
         case Kind.modEnvelope: drawModEnvelope(); break;
       }
-      _canvas.fillStyle = RGBA(54, 99, 117, 210);
+      _canvas.fillStyle = RGBA(160, 176, 185, 220);
       _canvas.fillRect(0, 0, position.width, 1);
       _canvas.fillRect(0, position.height - 1, position.width, 1);
       _canvas.fillRect(0, 0, 1, position.height);
@@ -214,7 +310,7 @@ private class ScopeUI : UIElement, IParameterListener {
   }
 
   void drawGrid() {
-    _canvas.fillStyle = RGBA(48, 87, 104, 52);
+    _canvas.fillStyle = RGBA(134, 154, 165, 65);
     foreach (i; 1 .. 4) {
       _canvas.fillRect(position.width * i / 4, pad, 1, position.height - pad * 2);
       _canvas.fillRect(pad, position.height * i / 4, position.width - pad * 2, 1);
@@ -243,9 +339,9 @@ private class ScopeUI : UIElement, IParameterListener {
       const float phase = cast(float)(x - pad) / (innerW - 1);
       const int y = cast(int)(position.height / 2 -
         waveValue(wave, phase, pw) * (position.height - pad * 2) * 0.42f);
-      _canvas.fillStyle = RGBA(15, 94, 120, 128);
+      _canvas.fillStyle = RGBA(45, 174, 193, 92);
       _canvas.fillRect(x, y, 1, floor - y);
-      _canvas.fillStyle = RGBA(89, 236, 245, 255);
+      _canvas.fillStyle = RGBA(0, 137, 161, 255);
       const int top = y < previousY ? y : previousY;
       const int bottom = y > previousY ? y : previousY;
       _canvas.fillRect(x, top, 2, bottom - top + 2);
@@ -258,7 +354,7 @@ private class ScopeUI : UIElement, IParameterListener {
     const int span = x1 - x0;
     foreach (offset; 0 .. span + 1) {
       const int y = y0 + (y1 - y0) * offset / (span == 0 ? 1 : span);
-      _canvas.fillStyle = RGBA(20, 80, 106, 128);
+      _canvas.fillStyle = RGBA(45, 174, 193, 92);
       _canvas.fillRect(x0 + offset, y, 1, floor - y);
       _canvas.fillStyle = color;
       _canvas.fillRect(x0 + offset, y - 1, 2, 3);
@@ -274,11 +370,11 @@ private class ScopeUI : UIElement, IParameterListener {
     const int dx = ax + cast(int)(innerW * (0.08f + norm(1) * 0.20f));
     const int rx = w - pad - cast(int)(innerW * (0.08f + norm(3) * 0.20f));
     const int sy = floor - cast(int)((h - pad * 2) * norm(2) * 0.86f);
-    lineArea(pad, floor, ax, pad, RGBA(89, 236, 245, 255));
-    lineArea(ax, pad, dx, sy, RGBA(89, 236, 245, 255));
-    lineArea(dx, sy, rx, sy, RGBA(89, 236, 245, 255));
-    lineArea(rx, sy, w - pad, floor, RGBA(89, 236, 245, 255));
-    _canvas.fillStyle = RGBA(255, 171, 68, 255);
+    lineArea(pad, floor, ax, pad, RGBA(0, 137, 161, 255));
+    lineArea(ax, pad, dx, sy, RGBA(0, 137, 161, 255));
+    lineArea(dx, sy, rx, sy, RGBA(0, 137, 161, 255));
+    lineArea(rx, sy, w - pad, floor, RGBA(0, 137, 161, 255));
+    _canvas.fillStyle = RGBA(221, 103, 28, 255);
     _canvas.fillCircle(ax, pad, 3);
     _canvas.fillCircle(dx, sy, 3);
     _canvas.fillCircle(rx, sy, 3);
@@ -289,9 +385,9 @@ private class ScopeUI : UIElement, IParameterListener {
     const int floor = position.height - pad;
     const int ax = pad + cast(int)((w - pad * 2) * (0.10f + norm(0) * 0.32f));
     const int dx = ax + cast(int)((w - pad * 2) * (0.15f + norm(1) * 0.35f));
-    lineArea(pad, floor, ax, pad, RGBA(245, 110, 182, 255));
-    lineArea(ax, pad, dx, floor, RGBA(245, 110, 182, 255));
-    lineArea(dx, floor, w - pad, floor, RGBA(245, 110, 182, 255));
+    lineArea(pad, floor, ax, pad, RGBA(190, 48, 112, 255));
+    lineArea(ax, pad, dx, floor, RGBA(190, 48, 112, 255));
+    lineArea(dx, floor, w - pad, floor, RGBA(190, 48, 112, 255));
   }
 
   float response(FilterKind kind, float frequency, float cutoff, float q) {
@@ -324,9 +420,9 @@ private class ScopeUI : UIElement, IParameterListener {
       const float f = cast(float)(x - pad) / (innerW - 1);
       const int y = floor - cast(int)(response(kind, f, norm(1), norm(2)) *
                                       (position.height - pad * 2));
-      _canvas.fillStyle = RGBA(15, 94, 120, 128);
+      _canvas.fillStyle = RGBA(45, 174, 193, 92);
       _canvas.fillRect(x, y, 1, floor - y);
-      _canvas.fillStyle = RGBA(89, 236, 245, 255);
+      _canvas.fillStyle = RGBA(0, 137, 161, 255);
       _canvas.fillRect(x, y - 1, 2, 3);
     }
   }
@@ -395,11 +491,28 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
                               cast(int)(headerHeight * scale)).intersection(dirty);
       if (!header.empty) diffuseMap.cropImageRef(header).fillAll(headerBg);
 
+      auto headerEdge = rectangle(0, cast(int)(headerHeight * scale) - 1,
+                                  position.width, 1).intersection(dirty);
+      if (!headerEdge.empty)
+        diffuseMap.cropImageRef(headerEdge).fillAll(cardEdge);
+
       foreach (card; _cards[]) {
         if (card.page != _activePage) continue;
-        auto rect = card.rect.scaleByFactor(scale).intersection(dirty);
+        const scaledCard = card.rect.scaleByFactor(scale);
+        auto rect = scaledCard.intersection(dirty);
         if (rect.empty) continue;
         diffuseMap.cropImageRef(rect).fillAll(cardBg);
+
+        auto left = rectangle(scaledCard.min.x, scaledCard.min.y, 1,
+                              scaledCard.height).intersection(dirty);
+        auto right = rectangle(scaledCard.max.x - 1, scaledCard.min.y, 1,
+                               scaledCard.height).intersection(dirty);
+        auto bottom = rectangle(scaledCard.min.x, scaledCard.max.y - 1,
+                                scaledCard.width, 1).intersection(dirty);
+        if (!left.empty) diffuseMap.cropImageRef(left).fillAll(cardEdge);
+        if (!right.empty) diffuseMap.cropImageRef(right).fillAll(cardEdge);
+        if (!bottom.empty) diffuseMap.cropImageRef(bottom).fillAll(cardEdge);
+
         auto top = rectangle(card.rect.min.x, card.rect.min.y, card.rect.width, 3)
           .scaleByFactor(scale).intersection(dirty);
         if (!top.empty) diffuseMap.cropImageRef(top).fillAll(card.accent);
@@ -654,21 +767,9 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     return label;
   }
 
-  UIKnob knob(Page page, Params id, int x, int y, string caption) {
-    auto control = mallocNew!UIKnob(context, _params[id]);
+  FlatKnobUI knob(Page page, Params id, int x, int y, string caption) {
+    auto control = mallocNew!FlatKnobUI(context, _params[id]);
     control.position = rectangle(x, y, 46, 46);
-    control.style = KnobStyle.cylinder;
-    control.knobRadius = 0.62f;
-    control.knobDiffuse = RGBA(48, 60, 70, 0);
-    control.knobMaterial = RGBA(80, 60, 100, 0);
-    control.numLEDs = 0;
-    control.LEDDepth = 0;
-    control.litTrailDiffuse = cyan;
-    control.litTrailDiffuseAlt = orange;
-    control.hasAlternateTrail = true;
-    control.unlitTrailDiffuse = RGBA(34, 47, 58, 0);
-    control.trailRadiusMin = 0.80f;
-    control.trailRadiusMax = 0.94f;
     addPageChild(page, control);
     addPageLabel(page, caption, rectangle(x - 3, y + 45, 52, 15), 8, textMuted);
     return control;
@@ -689,7 +790,7 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
                                            cast(BoolParameter)_params[id]);
     control.position = rectangle(x, y, 28, 28);
     control.diffuseOn = cyanBright;
-    control.diffuseOff = RGBA(37, 49, 59, 0);
+    control.diffuseOff = RGBA(192, 202, 208, 0);
     addPageChild(page, control);
     addPageLabel(page, caption, rectangle(x - 8, y + 29, 44, 14), 8, textMuted);
     return control;
