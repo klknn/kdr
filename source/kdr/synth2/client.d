@@ -34,7 +34,7 @@ import kdr.params : buildParams;
 import kdr.waveform : Waveform;
 import kdr.synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
 import kdr.testing : benchmarkWithDefaultParams, GenericTestHost;
-version (unittest) {} else import kdr.synth2.gui : Synth2GUI;
+version (unittest) {} else import kdr.synth2.gui2 : Synth2GUI2;
 
 /// Polyphonic digital-aliasing synth
 class Synth2Client : Client {
@@ -54,7 +54,7 @@ class Synth2Client : Client {
   // NOTE: this method will not call until GUI required (lazy)
   version (unittest) {} else
   override IGraphics createGraphics() {
-    _gui = mallocNew!Synth2GUI(
+    _gui = mallocNew!Synth2GUI2(
         this.params,
     );
     return _gui;
@@ -433,7 +433,7 @@ class Synth2Client : Client {
   Equalizer _eq;
   Oscillator _osc2, _oscSub;
   Oscillator[8] _osc1s;  // +7 for detune
-  version (unittest) {} else Synth2GUI _gui;
+  version (unittest) {} else Synth2GUI2 _gui;
 }
 
 unittest {
