@@ -51,6 +51,15 @@ Features (TODO)
   - [ ] Control change
   - [ ] Program change
 
+## synth2p1
+
+Synth2 with modern tabbed page-based GUI (Synth, Mod, FX) and theme switching.
+
+- [x] Inherits full Synth2 virtual-analog DSP engine
+- [x] Modern page-based interface (Synth / Mod / FX tabs)
+- [x] Realtime interactive waveform, filter response, envelope & LFO scopes
+- [x] Flat light theme / Cyberpunk dark theme toggle
+
 ## envtool
 
 Envelope shaping effect for tremolo sidechain like kickstart or LFO tools.
@@ -71,6 +80,19 @@ TBA
 ## Hott
 
 Yet another OTT clone
+
+## khrm
+
+Colour Bass harmonic sweetener and resonator effect inspired by Xynth Audio Chroma.
+
+- [x] Simple yet versatile Color knob (dry/wet + resonant decay & harmonic saturation)
+- [x] 12-note keyboard scale selector (C through B)
+- [x] Central realtime spectro visualizer with harmonic guide pillars
+- [x] Low latency / High quality dual engine modes
+- [x] MIDI tracking mode
+- [x] Spectral sweetening mode (transient preservation & sparkle harmonics)
+- [x] Built-in presets: Lead, Drum, Bass, Vocal, Chromatic, MIDI Tracked
+- [x] Purple cyberpunk theme GUI
 
 ## History
 

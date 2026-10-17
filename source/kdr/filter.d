@@ -10,7 +10,7 @@
 */
 module kdr.filter;
 
-import mir.math : approxEqual, PI, SQRT2, fmax;
+import mir.math : approxEqual, cos, sin, sqrt, PI, SQRT2, fmax;
 
 @nogc nothrow @safe pure:
 
@@ -61,6 +61,31 @@ struct Filter {
     }
     y[0] = output;
     return output;
+  }
+
+  /// Magnitude of the current digital transfer function at `frequencyHz`.
+  /// This is read-only and is used by graphical frequency-response displays.
+  float responseMagnitude(float frequencyHz) const {
+    if (kind == FilterKind.none) return 1;
+    const double omega = 2.0 * PI * frequencyHz / sampleRate;
+    double numeratorReal;
+    double numeratorImaginary;
+    foreach (i; 0 .. nFIR) {
+      numeratorReal += b[i] * cos(omega * i);
+      numeratorImaginary -= b[i] * sin(omega * i);
+    }
+    double denominatorReal = 1;
+    double denominatorImaginary;
+    foreach (i; 0 .. nIIR) {
+      denominatorReal += a[i] * cos(omega * (i + 1));
+      denominatorImaginary -= a[i] * sin(omega * (i + 1));
+    }
+    const double numeratorPower = numeratorReal * numeratorReal +
+                                  numeratorImaginary * numeratorImaginary;
+    const double denominatorPower = denominatorReal * denominatorReal +
+                                    denominatorImaginary * denominatorImaginary;
+    if (!(numeratorPower >= 0) || !(denominatorPower > 0)) return 0;
+    return cast(float)sqrt(numeratorPower / denominatorPower);
   }
 
   void setSampleRate(float sampleRate) {

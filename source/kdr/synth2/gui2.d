@@ -7,7 +7,7 @@ License:   $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 module kdr.synth2.gui2;
 
 import core.stdc.stdio : snprintf;
-import mir.math : cos, sin, PI;
+import mir.math : cos, exp, log, sin, PI;
 
 import dplug.canvas : Canvas;
 import dplug.client.params : BoolParameter, FloatParameter, IntegerParameter,
@@ -18,9 +18,9 @@ import dplug.graphics : Font, ImageRef, L16, RGBA, cropImageRef, fillAll;
 import dplug.gui : Click, GUIGraphics, MouseState, UIContext, UIElement,
   flagAnimated, flagPBR, flagRaw;
 import dplug.math : box2i, rectangle;
-import dplug.pbrwidgets : UILabel, UIOnOffSwitch;
+import dplug.pbrwidgets : KnobStyle, UILabel, UIKnob, UIOnOffSwitch;
 
-import kdr.filter : FilterKind;
+import kdr.filter : Filter, FilterKind;
 import kdr.synth2.params : Params;
 import kdr.waveform : Waveform;
 
@@ -41,7 +41,15 @@ private enum RGBA cyanBright = RGBA(0, 151, 174, 0);
 private enum RGBA orange = RGBA(231, 119, 32, 100);
 private enum RGBA magenta = RGBA(202, 62, 124, 100);
 
+private enum RGBA darkBg = RGBA(9, 13, 20, 0);
+private enum RGBA darkHeaderBg = RGBA(15, 21, 31, 0);
+private enum RGBA darkCardBg = RGBA(20, 28, 39, 0);
+private enum RGBA darkCardEdge = RGBA(45, 61, 78, 0);
+private enum RGBA darkTextPrimary = RGBA(224, 235, 242, 0);
+private enum RGBA darkTextMuted = RGBA(120, 145, 160, 0);
+
 private enum Page : int { synth, mod, fx }
+private enum Theme : int { light, dark, envtool }
 
 private interface IPageHost {
   nothrow @nogc:
@@ -49,14 +57,21 @@ private interface IPageHost {
   Page activePage() const;
 }
 
+private interface IThemeHost {
+  nothrow @nogc:
+  Theme theme() const;
+  void cycleTheme();
+}
+
 /// Clickable page tab; its text is a separate UILabel layered above it.
 private class PageTabUI : UIElement {
  public:
   nothrow @nogc:
 
-  this(UIContext context, IPageHost host, Page page) {
+  this(UIContext context, IPageHost host, IThemeHost themeHost, Page page) {
     super(context, flagPBR);
     _host = host;
+    _themeHost = themeHost;
     _page = page;
   }
 
@@ -68,9 +83,11 @@ private class PageTabUI : UIElement {
   override void onDrawPBR(ImageRef!RGBA diffuseMap, ImageRef!L16 depthMap,
                           ImageRef!RGBA materialMap, box2i[] dirtyRects) {
     const active = _host.activePage == _page;
+    const dark = _themeHost.theme == Theme.dark;
     foreach (rect; dirtyRects) {
-      diffuseMap.cropImageRef(rect).fillAll(active ? RGBA(218, 235, 239, 0)
-                                                    : headerBg);
+      diffuseMap.cropImageRef(rect).fillAll(
+        dark ? (active ? RGBA(27, 43, 57, 0) : darkHeaderBg)
+             : (active ? RGBA(218, 235, 239, 0) : headerBg));
       depthMap.cropImageRef(rect).fillAll(L16(0));
       materialMap.cropImageRef(rect).fillAll(RGBA(0, 0, 0, 0));
       if (active) {
@@ -84,7 +101,61 @@ private class PageTabUI : UIElement {
 
  private:
   IPageHost _host;
+  IThemeHost _themeHost;
   Page _page;
+}
+
+/// Header selector for switching the three visual themes.
+private class ThemeSelectorUI : UIElement {
+ public:
+  nothrow @nogc:
+
+  this(UIContext context, Font font, IThemeHost host) {
+    super(context, flagPBR);
+    _host = host;
+    addChild(_label = mallocNew!UILabel(context, font, ""));
+    themeChanged();
+  }
+
+  override void reflow() {
+    _label.position = rectangle(position.min.x + 2, position.min.y + 1,
+                                position.width - 4, position.height - 2);
+    _label.textSize = position.height * 0.34f;
+  }
+
+  override Click onMouseClick(int, int, int, bool, MouseState) {
+    _host.cycleTheme();
+    return Click.handled;
+  }
+
+  void themeChanged() {
+    final switch (_host.theme) {
+      case Theme.light: _label.text = "THEME  LIGHT"; break;
+      case Theme.dark: _label.text = "THEME  DARK"; break;
+      case Theme.envtool: _label.text = "THEME  ENVTOOL"; break;
+    }
+    _label.textColor = _host.theme == Theme.dark ? darkTextPrimary : textPrimary;
+    setDirtyWhole();
+  }
+
+  override void onDrawPBR(ImageRef!RGBA diffuseMap, ImageRef!L16 depthMap,
+                          ImageRef!RGBA materialMap, box2i[] dirtyRects) {
+    RGBA color;
+    final switch (_host.theme) {
+      case Theme.light: color = RGBA(231, 237, 240, 0); break;
+      case Theme.dark: color = RGBA(29, 42, 54, 0); break;
+      case Theme.envtool: color = RGBA(214, 235, 235, 0); break;
+    }
+    foreach (rect; dirtyRects) {
+      diffuseMap.cropImageRef(rect).fillAll(color);
+      depthMap.cropImageRef(rect).fillAll(L16(4000));
+      materialMap.cropImageRef(rect).fillAll(RGBA(220, 10, 30, 0));
+    }
+  }
+
+ private:
+  IThemeHost _host;
+  UILabel _label;
 }
 
 /// Flat 2D knob with a high-contrast value arc. This avoids PBR lighting and
@@ -93,9 +164,10 @@ private class FlatKnobUI : UIElement, IParameterListener {
  public:
   nothrow @nogc:
 
-  this(UIContext context, Parameter param) {
+  this(UIContext context, Parameter param, IThemeHost host) {
     super(context, flagRaw);
     _param = param;
+    _host = host;
     _param.addListener(this);
   }
 
@@ -147,7 +219,8 @@ private class FlatKnobUI : UIElement, IParameterListener {
         _canvas.fillCircle(cx + cos(angle) * radius,
                            cy + sin(angle) * radius, 1.4f);
       }
-      _canvas.fillStyle = RGBA(0, 151, 174, 255);
+      _canvas.fillStyle = _host.theme == Theme.envtool
+        ? RGBA(0, 190, 198, 255) : RGBA(0, 151, 174, 255);
       const int litPoints = cast(int)(value * 34f + 0.5f);
       foreach (i; 0 .. litPoints + 1) {
         const float angle = -PI * 0.75f + PI * 1.5f * i / 34f;
@@ -179,6 +252,7 @@ private class FlatKnobUI : UIElement, IParameterListener {
 
   Canvas _canvas;
   Parameter _param;
+  IThemeHost _host;
   float _dragValue;
   bool _editing;
 }
@@ -188,12 +262,13 @@ private class SelectorUI : UIElement, IParameterListener {
  public:
   nothrow @nogc:
 
-  this(UIContext context, Font font, IntegerParameter param) {
+  this(UIContext context, Font font, IntegerParameter param, IThemeHost host) {
     super(context, flagPBR);
     _param = param;
+    _host = host;
     _param.addListener(this);
     addChild(_valueLabel = mallocNew!UILabel(context, font, ""));
-    _valueLabel.textColor = textPrimary;
+    themeChanged();
     updateText();
   }
 
@@ -222,9 +297,11 @@ private class SelectorUI : UIElement, IParameterListener {
 
   override void onDrawPBR(ImageRef!RGBA diffuseMap, ImageRef!L16 depthMap,
                           ImageRef!RGBA materialMap, box2i[] dirtyRects) {
+    const dark = _host.theme == Theme.dark;
     foreach (rect; dirtyRects) {
-      diffuseMap.cropImageRef(rect).fillAll(isMouseOver ? RGBA(218, 231, 235, 0)
-                                                         : RGBA(231, 237, 240, 0));
+      diffuseMap.cropImageRef(rect).fillAll(
+        dark ? (isMouseOver ? RGBA(40, 62, 75, 0) : RGBA(29, 42, 54, 0))
+             : (isMouseOver ? RGBA(218, 231, 235, 0) : RGBA(231, 237, 240, 0)));
       depthMap.cropImageRef(rect).fillAll(L16(5000));
       materialMap.cropImageRef(rect).fillAll(RGBA(220, 10, 30, 0));
     }
@@ -236,6 +313,12 @@ private class SelectorUI : UIElement, IParameterListener {
   override void onBeginParameterHover(Parameter) {}
   override void onEndParameterHover(Parameter) {}
 
+  void themeChanged() {
+    _valueLabel.textColor = _host.theme == Theme.dark
+      ? darkTextPrimary : textPrimary;
+    setDirtyWhole();
+  }
+
  private:
   void updateText() {
     _param.toStringN(_text.ptr, _text.length);
@@ -245,6 +328,7 @@ private class SelectorUI : UIElement, IParameterListener {
   }
 
   IntegerParameter _param;
+  IThemeHost _host;
   UILabel _valueLabel;
   char[48] _text;
 }
@@ -257,12 +341,14 @@ private class ScopeUI : UIElement, IParameterListener {
 
   nothrow @nogc:
 
-  this(UIContext context, Kind kind, Parameter[] params,
-       Params p0, Params p1, Params p2, Params p3, int count) {
+  this(UIContext context, Kind kind, Parameter[] params, IThemeHost host,
+       Params p0, Params p1, Params p2, Params p3, Params p4, Params p5,
+       int count) {
     super(context, flagRaw | flagAnimated);
     _kind = kind;
     _params = params;
-    _ids = [p0, p1, p2, p3];
+    _host = host;
+    _ids = [p0, p1, p2, p3, p4, p5];
     _count = count;
     foreach (i; 0 .. _count) _params[_ids[i]].addListener(this);
   }
@@ -276,7 +362,7 @@ private class ScopeUI : UIElement, IParameterListener {
       auto cropped = rawMap.cropImageRef(rect);
       _canvas.initialize(cropped);
       _canvas.translate(-rect.min.x, -rect.min.y);
-      _canvas.fillStyle = RGBA(250, 252, 253, 250);
+      _canvas.fillStyle = scopeBackground();
       _canvas.fillRect(0, 0, position.width, position.height);
       drawGrid();
       final switch (_kind) {
@@ -285,7 +371,7 @@ private class ScopeUI : UIElement, IParameterListener {
         case Kind.filter: drawFilter(); break;
         case Kind.modEnvelope: drawModEnvelope(); break;
       }
-      _canvas.fillStyle = RGBA(160, 176, 185, 220);
+      _canvas.fillStyle = scopeFrame();
       _canvas.fillRect(0, 0, position.width, 1);
       _canvas.fillRect(0, position.height - 1, position.width, 1);
       _canvas.fillRect(0, 0, 1, position.height);
@@ -309,11 +395,80 @@ private class ScopeUI : UIElement, IParameterListener {
     return 0;
   }
 
+  RGBA scopeBackground() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(250, 252, 253, 250);
+      case Theme.dark: return RGBA(8, 19, 28, 245);
+      case Theme.envtool: return RGBA(0, 32, 32, 235);
+    }
+  }
+
+  RGBA scopeFrame() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(160, 176, 185, 220);
+      case Theme.dark: return RGBA(54, 99, 117, 210);
+      case Theme.envtool: return RGBA(70, 150, 150, 210);
+    }
+  }
+
+  RGBA gridColor() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(134, 154, 165, 65);
+      case Theme.dark: return RGBA(48, 87, 104, 52);
+      case Theme.envtool: return RGBA(100, 200, 200, 42);
+    }
+  }
+
+  RGBA scopeArea() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(45, 174, 193, 92);
+      case Theme.dark: return RGBA(15, 94, 120, 128);
+      case Theme.envtool: return RGBA(0, 96, 104, 125);
+    }
+  }
+
+  RGBA scopeLine() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(0, 137, 161, 255);
+      case Theme.dark: return RGBA(89, 236, 245, 255);
+      case Theme.envtool: return RGBA(0, 255, 255, 255);
+    }
+  }
+
+  RGBA scopePoint() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(221, 103, 28, 255);
+      case Theme.dark: return RGBA(255, 171, 68, 255);
+      case Theme.envtool: return RGBA(100, 220, 220, 255);
+    }
+  }
+
+  RGBA modLine() {
+    final switch (_host.theme) {
+      case Theme.light: return RGBA(190, 48, 112, 255);
+      case Theme.dark: return RGBA(245, 110, 182, 255);
+      case Theme.envtool: return RGBA(0, 255, 255, 255);
+    }
+  }
+
   void drawGrid() {
-    _canvas.fillStyle = RGBA(134, 154, 165, 65);
-    foreach (i; 1 .. 4) {
-      _canvas.fillRect(position.width * i / 4, pad, 1, position.height - pad * 2);
-      _canvas.fillRect(pad, position.height * i / 4, position.width - pad * 2, 1);
+    _canvas.fillStyle = gridColor();
+    if (_kind == Kind.filter) {
+      // 20 Hz .. 20 kHz logarithmic X axis and +12 .. -48 dB Y axis.
+      foreach (i; 1 .. 4)
+        _canvas.fillRect(pad + (position.width - pad * 2) * i / 3, pad, 1,
+                         position.height - pad * 2);
+      foreach (i; 0 .. 6)
+        _canvas.fillRect(pad, pad + (position.height - pad * 2) * i / 5,
+                         position.width - pad * 2, 1);
+      return;
+    }
+    const int divisions = _host.theme == Theme.envtool ? 8 : 4;
+    foreach (i; 1 .. divisions) {
+      _canvas.fillRect(position.width * i / divisions, pad, 1,
+                       position.height - pad * 2);
+      _canvas.fillRect(pad, position.height * i / divisions,
+                       position.width - pad * 2, 1);
     }
   }
 
@@ -329,19 +484,18 @@ private class ScopeUI : UIElement, IParameterListener {
     }
   }
 
-  void drawWaveform() {
-    const int floor = position.height - pad;
+  void drawWaveLane(Waveform wave, float pw, int centerY, float amplitude,
+                    RGBA line, RGBA area) {
     const int innerW = position.width - pad * 2;
-    const wave = cast(Waveform)(cast(IntegerParameter)_params[_ids[0]]).value;
-    const float pw = _count > 1 ? norm(1) : 0.5f;
-    int previousY = position.height / 2;
+    int previousY = centerY;
     foreach (x; pad .. position.width - pad) {
       const float phase = cast(float)(x - pad) / (innerW - 1);
-      const int y = cast(int)(position.height / 2 -
-        waveValue(wave, phase, pw) * (position.height - pad * 2) * 0.42f);
-      _canvas.fillStyle = RGBA(45, 174, 193, 92);
-      _canvas.fillRect(x, y, 1, floor - y);
-      _canvas.fillStyle = RGBA(0, 137, 161, 255);
+      const int y = cast(int)(centerY - waveValue(wave, phase, pw) * amplitude);
+      const int fillTop = y < centerY ? y : centerY;
+      const int fillBottom = y > centerY ? y : centerY;
+      _canvas.fillStyle = area;
+      _canvas.fillRect(x, fillTop, 1, fillBottom - fillTop + 1);
+      _canvas.fillStyle = line;
       const int top = y < previousY ? y : previousY;
       const int bottom = y > previousY ? y : previousY;
       _canvas.fillRect(x, top, 2, bottom - top + 2);
@@ -349,12 +503,67 @@ private class ScopeUI : UIElement, IParameterListener {
     }
   }
 
+  void drawWaveTrace(Waveform wave, float pw, int centerY, float amplitude,
+                     float frequencyRatio, RGBA color) {
+    const int innerW = position.width - pad * 2;
+    int previousY = centerY;
+    foreach (x; pad .. position.width - pad) {
+      const float basePhase = cast(float)(x - pad) / (innerW - 1);
+      float phase = basePhase * frequencyRatio;
+      if (phase > 1f) phase -= 1f;
+      const int y = cast(int)(centerY - waveValue(wave, phase, pw) * amplitude);
+      const int top = y < previousY ? y : previousY;
+      const int bottom = y > previousY ? y : previousY;
+      _canvas.fillStyle = color;
+      _canvas.fillRect(x, top, 1, bottom - top + 1);
+      previousY = y;
+    }
+  }
+
+  void drawWaveform() {
+    const float pw = _count > 1 ? norm(1) : 0.5f;
+    const wave1 = cast(Waveform)(cast(IntegerParameter)_params[_ids[0]]).value;
+    if (_count < 4) {
+      drawWaveLane(wave1, pw, position.height / 2,
+                   (position.height - pad * 2) * 0.42f,
+                   scopeLine(), scopeArea());
+      return;
+    }
+
+    const wave2 = cast(Waveform)(cast(IntegerParameter)_params[_ids[2]]).value;
+    const sub = cast(Waveform)(cast(IntegerParameter)_params[_ids[3]]).value;
+    const float detune = _count > 4 ? norm(4) : 0;
+    const int unison = _count > 5
+      ? (cast(IntegerParameter)_params[_ids[5]]).value : 1;
+    if (detune > 0 && unison > 1) {
+      auto ghost = scopeLine();
+      ghost.a = cast(ubyte)(45f + detune * 75f);
+      foreach (voice; 1 .. unison) {
+        const float semitones = log(detune + 1f) * 2f *
+          log(voice + 1f) / log(8f);
+        const float frequencyRatio = exp(log(2f) * semitones / 12f);
+        drawWaveTrace(wave1, pw, cast(int)(position.height * 0.24f),
+                      position.height * 0.17f, frequencyRatio, ghost);
+      }
+    }
+    // Separate lanes keep all three sources readable. SUB is intentionally
+    // smallest because it is a supporting oscillator.
+    drawWaveLane(wave1, pw, cast(int)(position.height * 0.24f),
+                 position.height * 0.17f, scopeLine(), scopeArea());
+    drawWaveLane(wave2, pw, cast(int)(position.height * 0.58f),
+                 position.height * 0.13f, RGBA(238, 126, 36, 255),
+                 RGBA(238, 126, 36, 55));
+    drawWaveLane(sub, pw, cast(int)(position.height * 0.84f),
+                 position.height * 0.065f, RGBA(211, 68, 137, 255),
+                 RGBA(211, 68, 137, 48));
+  }
+
   void lineArea(int x0, int y0, int x1, int y1, RGBA color) {
     const int floor = position.height - pad;
     const int span = x1 - x0;
     foreach (offset; 0 .. span + 1) {
       const int y = y0 + (y1 - y0) * offset / (span == 0 ? 1 : span);
-      _canvas.fillStyle = RGBA(45, 174, 193, 92);
+      _canvas.fillStyle = scopeArea();
       _canvas.fillRect(x0 + offset, y, 1, floor - y);
       _canvas.fillStyle = color;
       _canvas.fillRect(x0 + offset, y - 1, 2, 3);
@@ -370,11 +579,11 @@ private class ScopeUI : UIElement, IParameterListener {
     const int dx = ax + cast(int)(innerW * (0.08f + norm(1) * 0.20f));
     const int rx = w - pad - cast(int)(innerW * (0.08f + norm(3) * 0.20f));
     const int sy = floor - cast(int)((h - pad * 2) * norm(2) * 0.86f);
-    lineArea(pad, floor, ax, pad, RGBA(0, 137, 161, 255));
-    lineArea(ax, pad, dx, sy, RGBA(0, 137, 161, 255));
-    lineArea(dx, sy, rx, sy, RGBA(0, 137, 161, 255));
-    lineArea(rx, sy, w - pad, floor, RGBA(0, 137, 161, 255));
-    _canvas.fillStyle = RGBA(221, 103, 28, 255);
+    lineArea(pad, floor, ax, pad, scopeLine());
+    lineArea(ax, pad, dx, sy, scopeLine());
+    lineArea(dx, sy, rx, sy, scopeLine());
+    lineArea(rx, sy, w - pad, floor, scopeLine());
+    _canvas.fillStyle = scopePoint();
     _canvas.fillCircle(ax, pad, 3);
     _canvas.fillCircle(dx, sy, 3);
     _canvas.fillCircle(rx, sy, 3);
@@ -385,57 +594,54 @@ private class ScopeUI : UIElement, IParameterListener {
     const int floor = position.height - pad;
     const int ax = pad + cast(int)((w - pad * 2) * (0.10f + norm(0) * 0.32f));
     const int dx = ax + cast(int)((w - pad * 2) * (0.15f + norm(1) * 0.35f));
-    lineArea(pad, floor, ax, pad, RGBA(190, 48, 112, 255));
-    lineArea(ax, pad, dx, floor, RGBA(190, 48, 112, 255));
-    lineArea(dx, floor, w - pad, floor, RGBA(190, 48, 112, 255));
-  }
-
-  float response(FilterKind kind, float frequency, float cutoff, float q) {
-    if (kind == FilterKind.none) return 0.82f;
-    const float pivot = 0.03f + cutoff * 0.94f;
-    const float ratio = frequency / pivot;
-    const float slope = kind == FilterKind.LP6 || kind == FilterKind.HP6 ? 1.5f :
-                        kind == FilterKind.LP12 || kind == FilterKind.HP12 ? 3f : 5f;
-    const float lp = 1f / (1f + ratio * ratio * slope);
-    float value;
-    final switch (kind) {
-      case FilterKind.LP6, FilterKind.LP12, FilterKind.LP24, FilterKind.LPDL:
-        value = lp; break;
-      case FilterKind.HP6, FilterKind.HP12:
-        value = 1f - lp; break;
-      case FilterKind.BP12:
-        const float d = ratio - 1f;
-        value = 1f / (1f + d * d * (8f + (1f - q) * 15f)); break;
-      case FilterKind.none: value = 0.82f; break;
-    }
-    const float peak = q * 0.65f / (1f + (ratio - 1f) * (ratio - 1f) * 28f);
-    return value + peak > 1f ? 1f : value + peak;
+    lineArea(pad, floor, ax, pad, modLine());
+    lineArea(ax, pad, dx, floor, modLine());
+    lineArea(dx, floor, w - pad, floor, modLine());
   }
 
   void drawFilter() {
-    const int floor = position.height - pad;
     const int innerW = position.width - pad * 2;
+    const int innerH = position.height - pad * 2;
     const kind = cast(FilterKind)(cast(IntegerParameter)_params[_ids[0]]).value;
+    const float cutoff = cast(float)(cast(FloatParameter)_params[_ids[1]]).value;
+    const float resonance = cast(float)(cast(FloatParameter)_params[_ids[2]]).value;
+    _responseFilter.setParams(kind, cutoff, resonance);
+    const int zeroY = pad + cast(int)(12f / 60f * innerH);
+    int previousY = zeroY;
     foreach (x; pad .. position.width - pad) {
-      const float f = cast(float)(x - pad) / (innerW - 1);
-      const int y = floor - cast(int)(response(kind, f, norm(1), norm(2)) *
-                                      (position.height - pad * 2));
-      _canvas.fillStyle = RGBA(45, 174, 193, 92);
-      _canvas.fillRect(x, y, 1, floor - y);
-      _canvas.fillStyle = RGBA(0, 137, 161, 255);
-      _canvas.fillRect(x, y - 1, 2, 3);
+      const float axis = cast(float)(x - pad) / (innerW - 1);
+      const float frequency = 20f * exp(log(1000f) * axis);
+      float magnitude = _responseFilter.responseMagnitude(frequency);
+      // Guard the display against cancellation at extreme cutoff/Q values.
+      if (!(magnitude > 0)) magnitude = 0.000001f;
+      if (magnitude > 4f) magnitude = 4f;
+      float dB = 20f * log(magnitude) / log(10f);
+      if (dB > 12f) dB = 12f;
+      if (dB < -48f) dB = -48f;
+      const int y = pad + cast(int)((12f - dB) / 60f * innerH);
+      const int fillTop = y < zeroY ? y : zeroY;
+      const int fillBottom = y > zeroY ? y : zeroY;
+      _canvas.fillStyle = scopeArea();
+      _canvas.fillRect(x, fillTop, 1, fillBottom - fillTop + 1);
+      _canvas.fillStyle = scopeLine();
+      const int lineTop = y < previousY ? y : previousY;
+      const int lineBottom = y > previousY ? y : previousY;
+      _canvas.fillRect(x, lineTop - 1, 2, lineBottom - lineTop + 3);
+      previousY = y;
     }
   }
 
   Canvas _canvas;
   Kind _kind;
   Parameter[] _params;
-  Params[4] _ids;
+  IThemeHost _host;
+  Filter _responseFilter;
+  Params[6] _ids;
   int _count;
 }
 
 /// New Synth2 GUI. The legacy GUI remains intact in gui.d.
-class Synth2GUI2 : GUIGraphics, IPageHost {
+class Synth2GUI2 : GUIGraphics, IPageHost, IThemeHost {
  public:
   nothrow @nogc:
 
@@ -448,6 +654,8 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     _font = mallocNew!Font(cast(ubyte[])fontRaw);
     foreach (page; 0 .. 3) _pageChildren[page] = makeVec!UIElement();
     _cards = makeVec!Card();
+    _themedLabels = makeVec!ThemedLabel();
+    _themeControls = makeVec!ThemeControl();
 
     buildHeader();
     buildSynthPage();
@@ -483,25 +691,26 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
                           ImageRef!RGBA materialMap, box2i[] dirtyRects) {
     const float scale = position.width / cast(float)baseWidth;
     foreach (dirty; dirtyRects) {
-      diffuseMap.cropImageRef(dirty).fillAll(bg);
+      diffuseMap.cropImageRef(dirty).fillAll(currentBackground());
       depthMap.cropImageRef(dirty).fillAll(L16(0));
       materialMap.cropImageRef(dirty).fillAll(RGBA(0, 0, 0, 0));
 
       auto header = rectangle(0, 0, position.width,
                               cast(int)(headerHeight * scale)).intersection(dirty);
-      if (!header.empty) diffuseMap.cropImageRef(header).fillAll(headerBg);
+      if (!header.empty)
+        diffuseMap.cropImageRef(header).fillAll(currentHeaderBackground());
 
       auto headerEdge = rectangle(0, cast(int)(headerHeight * scale) - 1,
                                   position.width, 1).intersection(dirty);
       if (!headerEdge.empty)
-        diffuseMap.cropImageRef(headerEdge).fillAll(cardEdge);
+        diffuseMap.cropImageRef(headerEdge).fillAll(currentCardEdge());
 
       foreach (card; _cards[]) {
         if (card.page != _activePage) continue;
         const scaledCard = card.rect.scaleByFactor(scale);
         auto rect = scaledCard.intersection(dirty);
         if (rect.empty) continue;
-        diffuseMap.cropImageRef(rect).fillAll(cardBg);
+        diffuseMap.cropImageRef(rect).fillAll(currentCardBackground());
 
         auto left = rectangle(scaledCard.min.x, scaledCard.min.y, 1,
                               scaledCard.height).intersection(dirty);
@@ -509,13 +718,14 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
                                scaledCard.height).intersection(dirty);
         auto bottom = rectangle(scaledCard.min.x, scaledCard.max.y - 1,
                                 scaledCard.width, 1).intersection(dirty);
-        if (!left.empty) diffuseMap.cropImageRef(left).fillAll(cardEdge);
-        if (!right.empty) diffuseMap.cropImageRef(right).fillAll(cardEdge);
-        if (!bottom.empty) diffuseMap.cropImageRef(bottom).fillAll(cardEdge);
+        if (!left.empty) diffuseMap.cropImageRef(left).fillAll(currentCardEdge());
+        if (!right.empty) diffuseMap.cropImageRef(right).fillAll(currentCardEdge());
+        if (!bottom.empty) diffuseMap.cropImageRef(bottom).fillAll(currentCardEdge());
 
         auto top = rectangle(card.rect.min.x, card.rect.min.y, card.rect.width, 3)
           .scaleByFactor(scale).intersection(dirty);
-        if (!top.empty) diffuseMap.cropImageRef(top).fillAll(card.accent);
+        if (!top.empty)
+          diffuseMap.cropImageRef(top).fillAll(themeAccent(card.accent));
       }
     }
   }
@@ -531,29 +741,96 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     _activePage = page;
     foreach (p; 0 .. 3)
       foreach (child; _pageChildren[p][]) child.visibility = p == page;
+    applyTheme();
+  }
+
+  override Page activePage() const { return _activePage; }
+  override Theme theme() const { return _theme; }
+
+  override void cycleTheme() {
+    _theme = cast(Theme)((cast(int)_theme + 1) % 3);
+    applyTheme();
+  }
+
+ private:
+  struct Card { box2i rect; Page page; RGBA accent; }
+  struct ThemedLabel { UILabel label; RGBA lightColor; }
+  struct ThemeControl { UIElement element; Page page; bool darkOnly; }
+
+  RGBA currentBackground() const {
+    return _theme == Theme.dark ? darkBg : bg;
+  }
+
+  RGBA currentHeaderBackground() const {
+    return _theme == Theme.dark ? darkHeaderBg : headerBg;
+  }
+
+  RGBA currentCardBackground() const {
+    return _theme == Theme.dark ? darkCardBg : cardBg;
+  }
+
+  RGBA currentCardEdge() const {
+    return _theme == Theme.dark ? darkCardEdge : cardEdge;
+  }
+
+  RGBA themeAccent(RGBA color) const {
+    if (_theme != Theme.dark) return color;
+    if (color == cyan) return RGBA(47, 211, 227, 100);
+    if (color == orange) return RGBA(255, 151, 49, 100);
+    if (color == magenta) return RGBA(230, 82, 158, 100);
+    return color;
+  }
+
+  RGBA themeTextColor(RGBA color) const {
+    if (_theme != Theme.dark) return color;
+    if (color == textPrimary) return darkTextPrimary;
+    if (color == textMuted) return darkTextMuted;
+    if (color == cyanBright) return RGBA(89, 236, 245, 0);
+    return color;
+  }
+
+  void applyTheme() {
+    foreach (entry; _themedLabels[])
+      entry.label.textColor = themeTextColor(entry.lightColor);
+    foreach (entry; _themeControls[])
+      entry.element.visibility = entry.page == _activePage &&
+        (entry.darkOnly == (_theme == Theme.dark));
+    foreach (child; _children) {
+      if (auto selector = cast(SelectorUI) child) selector.themeChanged();
+      if (auto scopeWidget = cast(ScopeUI) child) scopeWidget.setDirtyWhole();
+      if (auto flat = cast(FlatKnobUI) child) flat.setDirtyWhole();
+      if (auto toggle = cast(UIOnOffSwitch) child) {
+        toggle.diffuseOn = _theme == Theme.dark
+          ? RGBA(89, 236, 245, 0) : cyanBright;
+        toggle.diffuseOff = _theme == Theme.dark
+          ? RGBA(37, 49, 59, 0) : RGBA(192, 202, 208, 0);
+        toggle.setDirtyWhole();
+      }
+    }
+    if (_themeSelector !is null) _themeSelector.themeChanged();
     foreach (tab; _tabs[]) tab.setDirtyWhole();
     setDirtyWhole();
   }
 
-  override Page activePage() const { return _activePage; }
-
- private:
-  struct Card { box2i rect; Page page; RGBA accent; }
-
   void buildHeader() {
-    addAlwaysLabel("SYNTH2", rectangle(18, 8, 150, 36), 26, textPrimary);
-    addAlwaysLabel("VISUAL POLYSYNTH", rectangle(165, 8, 180, 20), 11, textMuted);
-    addAlwaysLabel("BUILD " ~ __DATE__ ~ " " ~ __TIME__,
-                   rectangle(165, 28, 190, 14), 8, cyanBright);
+    // Keep the same lowercase "kdr product" wordmark used by envtool.
+    addAlwaysLabel("kdr", rectangle(18, 8, 54, 36), 17, cyanBright);
+    addAlwaysLabel("synth2", rectangle(70, 8, 120, 36), 25, textPrimary);
+    addAlwaysLabel("visual polysynth", rectangle(194, 8, 160, 20), 10, textMuted);
+    addAlwaysLabel("build: " ~ __DATE__ ~ " " ~ __TIME__,
+                   rectangle(194, 28, 162, 14), 7, cyanBright);
 
     static immutable string[3] names = ["SYNTH", "MOD", "FX"];
     foreach (i; 0 .. 3) {
-      auto tab = mallocNew!PageTabUI(context, this, cast(Page)i);
+      auto tab = mallocNew!PageTabUI(context, this, this, cast(Page)i);
       tab.position = rectangle(374 + i * 104, 8, 96, 38);
       addChild(tab);
       _tabs[i] = tab;
       addAlwaysLabel(names[i], tab.position, 12, textPrimary);
     }
+    _themeSelector = mallocNew!ThemeSelectorUI(context, _font, this);
+    _themeSelector.position = rectangle(686, 12, 96, 30);
+    addChild(_themeSelector);
     _tempo = addAlwaysLabel("120.0 BPM", rectangle(790, 14, 145, 24), 12,
                             textMuted);
   }
@@ -563,7 +840,8 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     section(Page.synth, "OSCILLATORS", 26, 73, 180);
     graph(Page.synth, ScopeUI.Kind.waveform, rectangle(26, 99, 396, 105),
           Params.osc1Waveform, Params.oscPulseWidth,
-          Params.osc1Waveform, Params.osc1Waveform, 2);
+          Params.osc2Waveform, Params.oscSubWaveform, 6,
+          Params.osc1Det, Params.osc1Unison);
 
     selector(Page.synth, Params.osc1Waveform, 26, 220, 82, "OSC 1");
     knob(Page.synth, Params.osc1Det, 116, 214, "DET");
@@ -577,13 +855,14 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     knob(Page.synth, Params.oscKeyShift, 130, 280, "KEY");
     knob(Page.synth, Params.oscTune, 182, 280, "TUNE");
     knob(Page.synth, Params.oscPhase, 234, 280, "PHASE");
-    toggle(Page.synth, Params.osc2Ring, 292, 288, "RING");
-    toggle(Page.synth, Params.osc2Sync, 342, 288, "SYNC");
-    toggle(Page.synth, Params.osc2Track, 392, 288, "TRACK");
+    knob(Page.synth, Params.osc1Unison, 286, 280, "UNISON");
 
     selector(Page.synth, Params.oscSubWaveform, 26, 352, 82, "SUB");
     knob(Page.synth, Params.oscSubVol, 116, 342, "LEVEL");
     toggle(Page.synth, Params.oscSubOct, 174, 350, "-1 OCT");
+    toggle(Page.synth, Params.osc2Ring, 232, 350, "RING");
+    toggle(Page.synth, Params.osc2Sync, 282, 350, "SYNC");
+    toggle(Page.synth, Params.osc2Track, 332, 350, "TRACK");
 
     addCard(Page.synth, rectangle(444, 64, 245, 334), orange);
     section(Page.synth, "FILTER", 456, 73, 100);
@@ -754,6 +1033,7 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     label.textSize = size;
     label.textColor = color;
     addChild(label);
+    _themedLabels ~= ThemedLabel(label, color);
     return label;
   }
 
@@ -764,21 +1044,41 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
     label.textSize = size;
     label.textColor = color;
     addPageChild(page, label);
+    _themedLabels ~= ThemedLabel(label, color);
     return label;
   }
 
-  FlatKnobUI knob(Page page, Params id, int x, int y, string caption) {
-    auto control = mallocNew!FlatKnobUI(context, _params[id]);
-    control.position = rectangle(x, y, 46, 46);
-    addPageChild(page, control);
+  UIElement knob(Page page, Params id, int x, int y, string caption) {
+    auto flatControl = mallocNew!FlatKnobUI(context, _params[id], this);
+    flatControl.position = rectangle(x, y, 46, 46);
+    addPageChild(page, flatControl);
+    _themeControls ~= ThemeControl(flatControl, page, false);
+
+    auto darkControl = mallocNew!UIKnob(context, _params[id]);
+    darkControl.position = rectangle(x, y, 46, 46);
+    darkControl.style = KnobStyle.cylinder;
+    darkControl.knobRadius = 0.62f;
+    darkControl.knobDiffuse = RGBA(48, 60, 70, 0);
+    darkControl.knobMaterial = RGBA(80, 60, 100, 0);
+    darkControl.numLEDs = 0;
+    darkControl.LEDDepth = 0;
+    darkControl.litTrailDiffuse = RGBA(47, 211, 227, 100);
+    darkControl.litTrailDiffuseAlt = RGBA(255, 151, 49, 100);
+    darkControl.hasAlternateTrail = true;
+    darkControl.unlitTrailDiffuse = RGBA(34, 47, 58, 0);
+    darkControl.trailRadiusMin = 0.80f;
+    darkControl.trailRadiusMax = 0.94f;
+    addPageChild(page, darkControl);
+    _themeControls ~= ThemeControl(darkControl, page, true);
+
     addPageLabel(page, caption, rectangle(x - 3, y + 45, 52, 15), 8, textMuted);
-    return control;
+    return flatControl;
   }
 
   SelectorUI selector(Page page, Params id, int x, int y, int width,
                       string caption) {
     auto control = mallocNew!SelectorUI(context, _font,
-                                        cast(IntegerParameter)_params[id]);
+                                        cast(IntegerParameter)_params[id], this);
     control.position = rectangle(x, y, width, 28);
     addPageChild(page, control);
     addPageLabel(page, caption, rectangle(x, y + 28, width, 14), 8, textMuted);
@@ -797,9 +1097,11 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
   }
 
   ScopeUI graph(Page page, ScopeUI.Kind kind, box2i rect,
-                Params p0, Params p1, Params p2, Params p3, int count) {
+                Params p0, Params p1, Params p2, Params p3, int count,
+                Params p4 = Params.osc1Det,
+                Params p5 = Params.osc1Unison) {
     auto display = mallocNew!ScopeUI(context, kind, _params,
-                                     p0, p1, p2, p3, count);
+                                     this, p0, p1, p2, p3, p4, p5, count);
     display.position = rect;
     addPageChild(page, display);
     return display;
@@ -816,9 +1118,13 @@ class Synth2GUI2 : GUIGraphics, IPageHost {
   double _tempoValue = -1;
   char[32] _tempoText;
   Page _activePage;
+  Theme _theme = Theme.light;
   PageTabUI[3] _tabs;
   Vec!UIElement[3] _pageChildren;
   Vec!Card _cards;
+  Vec!ThemedLabel _themedLabels;
+  Vec!ThemeControl _themeControls;
+  ThemeSelectorUI _themeSelector;
   UIWindowResizer _resizer;
   Vec!box2i _defaultRects;
   Vec!float _defaultTextSize;

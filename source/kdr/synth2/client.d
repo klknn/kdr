@@ -34,7 +34,7 @@ import kdr.params : buildParams;
 import kdr.waveform : Waveform;
 import kdr.synth2.params : Params, ParamBuilder, paramNames, MEnvDest, LfoDest, VoiceKind;
 import kdr.testing : benchmarkWithDefaultParams, GenericTestHost;
-version (unittest) {} else import kdr.synth2.gui2 : Synth2GUI2;
+version (unittest) {} else import kdr.synth2.gui : Synth2GUI;
 
 /// Polyphonic digital-aliasing synth
 class Synth2Client : Client {
@@ -54,7 +54,7 @@ class Synth2Client : Client {
   // NOTE: this method will not call until GUI required (lazy)
   version (unittest) {} else
   override IGraphics createGraphics() {
-    _gui = mallocNew!Synth2GUI2(
+    _gui = mallocNew!Synth2GUI(
         this.params,
     );
     return _gui;
@@ -99,15 +99,19 @@ class Synth2Client : Client {
     }
   }
 
-  override void processAudio(const(float*)[] inputs, float*[] outputs,
-                             int frames, TimeInfo info) {
-    // TODO: update tempo by a parameter listener.
+  void updateGuiTempo(double tempo) {
     version (unittest) {
     } else {
       if (_gui) {
-        _gui.setTempo(info.tempo);
+        _gui.setTempo(tempo);
       }
     }
+  }
+
+  override void processAudio(const(float*)[] inputs, float*[] outputs,
+                             int frames, TimeInfo info) {
+    // TODO: update tempo by a parameter listener.
+    updateGuiTempo(info.tempo);
 
     const poly = readParam!int(Params.voicePoly);
     const voiceKind = readParam!VoiceKind(Params.voiceKind);
@@ -170,6 +174,7 @@ class Synth2Client : Client {
 
     const useOsc1 = oscMix != 1 || sync || ring || fm > 0;
     const osc1Det = readParam!float(Params.osc1Det);
+    const osc1Unison = readParam!int(Params.osc1Unison);
     const useOsc1Det = osc1Det != 0;
     const useOsc2 = oscMix != 0 || sync || ring || fm > 0;
     const oscSubVol = exp2(readParam!float(Params.oscSubVol));
@@ -187,7 +192,8 @@ class Synth2Client : Client {
         if (oscPhase != ParamBuilder.ignoreOscPhase) {
           _osc1.setInitialPhase(oscPhase);
         }
-        if (osc1Det == 0) break; // skip detuned osc1s
+        if (osc1Det == 0 || i + 1 >= osc1Unison)
+          break; // skip disabled unison voices
         _osc1.setNoteDetune(log(osc1Det + 1f) * 2 *
                             log(i + 1f) / log(cast(float) _osc1s.length));
       }
@@ -243,9 +249,9 @@ class Synth2Client : Client {
     // Setup freq by MIDI and params.
     foreach (msg; this.getNextMidiMessages(frames)) {
       if (useOsc1) {
-        foreach (ref o1; _osc1s) {
-          o1.setMidi(msg);
-          if (!useOsc1Det) break;
+        foreach (i, ref o1; _osc1s) {
+          const enabled = i == 0 || (useOsc1Det && i < osc1Unison);
+          if (enabled || msg.isNoteOff || msg.isPitchBend) o1.setMidi(msg);
         }
       }
       if (useOsc2) _osc2.setMidi(msg);
@@ -258,9 +264,9 @@ class Synth2Client : Client {
     }
 
     if (useOsc1) {
-      foreach (ref o; _osc1s) {
+      foreach (i, ref o; _osc1s) {
         o.updateFreq();
-        if (!useOsc1Det) break;
+        if (!useOsc1Det || i + 1 >= osc1Unison) break;
       }
     }
     if (useOsc2) _osc2.updateFreq();
@@ -348,7 +354,7 @@ class Synth2Client : Client {
       // osc1
       float o1 = 0;
       if (useOsc1) {
-        foreach (ref Oscillator o; _osc1s) {
+        foreach (i, ref Oscillator o; _osc1s) {
           if (modPW != pw) o.setPulseWidth(modPW);
           if (doFM) o.setFM(modFM, _osc2);
           if (modOsc1NoteDiff != osc1NoteDiff) {
@@ -357,7 +363,7 @@ class Synth2Client : Client {
           }
           o1 += o.front;
           o.popFront();
-          if (osc1Det == 0) break;
+          if (osc1Det == 0 || i + 1 >= osc1Unison) break;
         }
       }
       float output = (1.0 - oscMix) * o1;
@@ -433,7 +439,7 @@ class Synth2Client : Client {
   Equalizer _eq;
   Oscillator _osc2, _oscSub;
   Oscillator[8] _osc1s;  // +7 for detune
-  version (unittest) {} else Synth2GUI2 _gui;
+  version (unittest) {} else Synth2GUI _gui;
 }
 
 unittest {
@@ -579,12 +585,12 @@ unittest {
     assert(!o.isPlaying);
   }
 
+  host.setParam!(Params.osc1Unison)(3);
   host.setParam!(Params.osc1Det)(1.0);
   host.processAudio();
-  // Check all the osc1s are playing.
-  foreach (o; host.client._osc1s) {
-    assert(o.isPlaying);
-  }
+  // Check only the selected number of unison oscillators are playing.
+  foreach (o; host.client._osc1s[0 .. 3]) assert(o.isPlaying);
+  foreach (o; host.client._osc1s[3 .. $]) assert(!o.isPlaying);
 }
 
 /// Test oscKeyShift/oscTune/oscPhase.

@@ -127,6 +127,9 @@ enum Params : int {
   chorusFeedback,
   chorusLevel,
   chorusWidth,
+
+  // Keep new parameters at the end so existing automation IDs remain stable.
+  osc1Unison,
 }
 
 static immutable paramNames = [__traits(allMembers, Params)];
@@ -174,6 +177,11 @@ struct ParamBuilder {
   static osc1Det() {
     return mallocNew!LinearFloatParameter(
         Params.osc1Det, "Osc1/Detune", "", 0, 1, 0);
+  }
+
+  static osc1Unison() {
+    return mallocNew!IntegerParameter(
+        Params.osc1Unison, "Osc1/Unison", "voices", 1, 8, 8);
   }
 
   static osc1FM() {
