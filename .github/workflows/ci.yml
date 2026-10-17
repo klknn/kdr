@@ -29,6 +29,10 @@ jobs:
           - macOS-latest
         plugin:
           - synth2
+          - synth2p1
+          - khrm
+          - rezonizer
+          - hott
           - freeverb
           - envtool
           - epiano2
