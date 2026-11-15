@@ -24,5 +24,17 @@
     "name": "kdr",
     "stringImportPaths": [
         "resource"
+    ],
+    "configurations": [
+        {
+            "name": "library",
+            "targetType": "library"
+        },
+        {
+            "name": "unittest",
+            "targetType": "library",
+            "sourcePaths": ["source", "tests"],
+            "importPaths": ["source", "tests"]
+        }
     ]
 }

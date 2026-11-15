@@ -36,6 +36,7 @@ jobs:
           - freeverb
           - envtool
           - epiano2
+          - stutter
         compiler:
           - 'ldc-latest'
     steps:
