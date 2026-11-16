@@ -294,6 +294,30 @@ struct CosineCrossfader {
 // StutterEngine Implementation
 // =============================================================================
 
+/// BT Stutter Edit 2 Quantize Step Modes (when Stutter Quantize is enabled).
+enum StutterStepMode : int {
+  free    = 0,
+  closest = 1,
+  walk    = 2,
+  skip    = 3,
+  stagger = 4,
+  random  = 5,
+}
+
+/// BT Stutter Edit 2 Buffer Movement Modes.
+enum BufferMovementMode : int {
+  slider = 0,
+  grid   = 1,
+  random = 2,
+}
+
+/// BT Stutter Edit 2 Jitter Pitch Modes.
+enum JitterPitchMode : int {
+  octaves  = 0,
+  octFifth = 1,
+  free     = 2,
+}
+
 /// Top-of-chain Stutter slice repetition and rate ramping engine
 struct StutterEngine {
   @nogc nothrow:
@@ -312,6 +336,33 @@ struct StutterEngine {
   float bufferPosition = 0.0f;
   double maxScrubSamples = 88200.0; // 2.0 seconds scrub range
 
+  // BT Stutter Edit 2 Stutter Step Quantization
+  bool quantizeEnabled = true;
+  StutterStepMode stepMode = StutterStepMode.closest;
+  float stepBeats = 0.25f;
+  int currentStepIdx = 4; // index into straightSubdivisionBeats
+  double stepTimerBeats = 0.0;
+  uint rngState = 0x13572468u;
+
+  // BT Stutter Edit 2 Buffer L/R Reverse, Link, Grid & Jitter
+  bool reverseL = false;
+  bool reverseR = false;
+  bool bufferEnabled = true;
+  BufferMovementMode bufferMovement = BufferMovementMode.slider;
+  float bufferGridBeats = 0.25f;
+  float bufferWidth = 1.0f;
+  float bufferCenter = 0.0f;
+  bool jitterEnabled = false;
+  JitterPitchMode jitterPitchMode = JitterPitchMode.octaves;
+  float jitterRhythmAmount = 0.0f;
+  float jitterPitchAmount = 0.0f;
+  float jitterRate = 0.25f;
+  float jitterOffset = 0.0f;
+
+  // Global Freeze locks target slice length & anchor
+  bool freezeActive = false;
+  float freezeBeats = 0.25f;
+
   // Slice playback tracking
   double slicePos = 0.0;           // Playhead progression in samples [0.0 .. sliceLength]
   double sliceLength = 22050.0;    // Active slice duration in samples
@@ -324,6 +375,11 @@ struct StutterEngine {
   CosineCrossfader gateCrossfader;  // Activation / de-activation dry-wet crossfader
   bool fadingToDry = false;
 
+  private uint nextRand() pure @safe {
+    rngState = rngState * 1664525u + 1013904223u;
+    return rngState;
+  }
+
   /// Resets engine state for a new sample rate
   void reset(double sr) pure {
     sampleRate = (sr > 1000.0) ? sr : 44100.0;
@@ -334,6 +390,10 @@ struct StutterEngine {
     triggerWriteIndex = 0.0;
     bufferPosition = 0.0f;
     maxScrubSamples = sampleRate * 2.0;
+
+    currentStepIdx = 4;
+    stepTimerBeats = 0.0;
+    rngState = 0x13572468u;
 
     slicePos = 0.0;
     sliceLength = sampleRate * 0.5; // Default 1/8 note
@@ -359,6 +419,7 @@ struct StutterEngine {
     bufferPosition = scrubPos;
     slicePos = 0.0;
     sliceIteration = 0;
+    stepTimerBeats = 0.0;
     currentDirection = 1;
     sliceCrossfader.stop();
     gateCrossfader.start(0.0, 0.0, 1.0, 1, XfadeLength);
@@ -385,12 +446,28 @@ struct StutterEngine {
     return (spb > 0.0) ? (sliceLength / spb) : 0.0;
   }
 
+  /// Computes closest index in `straightSubdivisionBeats`.
+  private static int closestSubdivisionIdx(double targetBeats) pure @safe {
+    import std.math : log2;
+    const double tLog = log2((targetBeats > 1e-4) ? targetBeats : 1e-4);
+    int bestIdx = 0;
+    double bestDist = double.infinity;
+    foreach (i, b; straightSubdivisionBeats) {
+      const double d = fabs(log2(b) - tLog);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = cast(int) i;
+      }
+    }
+    return bestIdx;
+  }
+
   /// Processes a single stereo audio sample through the stutter engine
   void process(StereoCaptureBuffer* buf, float inL, float inR, out float outL, out float outR,
                float gesturePhase, float rateStart, float rateEnd, const TVMCurve* rateCurve,
                int quantizeMode, int directionMode, float pitchRatio, float stereoOffset) pure {
     // If disabled and fully idle, pass dry signal through
-    if (!enabled || (!active && !gateCrossfader.active)) {
+    if ((!enabled && !freezeActive) || (!active && !gateCrossfader.active && !freezeActive)) {
       outL = inL;
       outR = inR;
       wasActive = false;
@@ -398,48 +475,116 @@ struct StutterEngine {
     }
 
     // Auto-trigger on rising edge of active if not explicitly triggered
-    if (active && !wasActive) {
+    if ((active || freezeActive) && !wasActive) {
       trigger(0, bufferPosition);
     }
 
-    // 1. Evaluate rate ramping and target slice length
+    // 1. Evaluate rate ramping & BT Stutter Edit 2 step modes
     const float curveVal = (rateCurve !is null) ? rateCurve.evaluate(gesturePhase) : gesturePhase;
-    const double targetBeats = evaluateRampedBeats(rateStart, rateEnd, curveVal, quantizeMode);
+    const int effQuantize = quantizeEnabled ? quantizeMode : StutterQuantizeMode.freeSweep;
+    double targetBeats = evaluateRampedBeats(rateStart, rateEnd, curveVal, effQuantize);
+
+    if (freezeActive) {
+      targetBeats = (freezeBeats > 0.01f) ? cast(double) freezeBeats : 0.25;
+    } else if (quantizeEnabled && stepMode != StutterStepMode.closest && stepMode != StutterStepMode.free) {
+      const int desiredIdx = closestSubdivisionIdx(targetBeats);
+      final switch (stepMode) {
+        case StutterStepMode.walk:
+          targetBeats = straightSubdivisionBeats[currentStepIdx];
+          break;
+        case StutterStepMode.skip:
+          targetBeats = straightSubdivisionBeats[currentStepIdx];
+          break;
+        case StutterStepMode.stagger:
+          const int staggerOffset = (sliceIteration % 2 == 0) ? 0 : 1;
+          int idx = currentStepIdx + staggerOffset;
+          if (idx >= cast(int) straightSubdivisionBeats.length) idx = cast(int) straightSubdivisionBeats.length - 1;
+          targetBeats = straightSubdivisionBeats[idx];
+          break;
+        case StutterStepMode.random:
+          targetBeats = straightSubdivisionBeats[currentStepIdx];
+          break;
+        case StutterStepMode.free:
+        case StutterStepMode.closest:
+          break;
+      }
+      // On slice boundary update (handled below via desiredIdx)
+      cast(void) desiredIdx;
+    }
+
+    if (jitterEnabled && jitterRhythmAmount > 0.01f) {
+      const float rNorm = (cast(int)(sliceIteration * 7919) % 100) * 0.01f - 0.5f;
+      targetBeats *= (1.0 + cast(double) rNorm * cast(double) jitterRhythmAmount * 0.5);
+      if (targetBeats < 0.03125) targetBeats = 0.03125;
+    }
+
     targetSliceLength = beatsToSamples(targetBeats, tempo, sampleRate);
     if (targetSliceLength < 16.0) targetSliceLength = 16.0;
 
-    // 2. Playback speed & pitch scaling
-    const double speed = (pitchRatio > 0.01f && pitchRatio < 16.0f) ? cast(double) pitchRatio : 1.0;
+    // 2. Playback speed & pitch scaling (with optional Jitter pitch modulation)
+    double speed = (pitchRatio > 0.01f && pitchRatio < 16.0f) ? cast(double) pitchRatio : 1.0;
+    if (jitterEnabled && jitterPitchAmount > 0.01f) {
+      const int jitHash = (sliceIteration + cast(int)(jitterOffset * 16.0f)) & 3;
+      if (jitterPitchMode == JitterPitchMode.octaves) {
+        if (jitHash == 1) speed *= 2.0;
+        else if (jitHash == 3 && jitterPitchAmount > 0.5f) speed *= 0.5;
+      } else if (jitterPitchMode == JitterPitchMode.octFifth) {
+        if (jitHash == 1) speed *= 1.4983; // perfect fifth
+        else if (jitHash == 2) speed *= 2.0;
+        else if (jitHash == 3 && jitterPitchAmount > 0.5f) speed *= 0.5;
+      } else {
+        const float semi = (jitHash - 1.5f) * 8.0f * jitterPitchAmount;
+        import std.math : exp2;
+        speed *= exp2(cast(double) semi / 12.0);
+      }
+    }
 
-    // 3. Determine directional trajectory
+    // 3. Determine directional trajectory (with per-channel L/R Reverse support)
+    int baseDir = 1;
     switch (directionMode) {
       case BufferDirection.reverse:
-        currentDirection = -1;
+        baseDir = -1;
         break;
       case BufferDirection.pendulum:
-        currentDirection = (sliceIteration % 2 == 0) ? +1 : -1;
+        baseDir = (sliceIteration % 2 == 0) ? +1 : -1;
         break;
       case BufferDirection.forward:
       default:
-        currentDirection = +1;
+        baseDir = +1;
         break;
     }
+    currentDirection = baseDir;
+    const int dirL = reverseL ? -baseDir : baseDir;
+    const int dirR = reverseR ? -baseDir : baseDir;
 
     // 4. Compute current read positions within capture buffer
-    const double scrubOffset = cast(double) bufferPosition * maxScrubSamples;
+    double effBufPos = bufferEnabled ? cast(double) bufferPosition : 0.0;
+    if (bufferEnabled && bufferMovement == BufferMovementMode.grid) {
+      const double gridBeats = (bufferGridBeats > 0.005f) ? cast(double) bufferGridBeats : 0.25;
+      const double stepFrac = (gridBeats / 4.0);
+      if (stepFrac > 1e-4) {
+        import core.math : fabs;
+        const double snapped = cast(int)(effBufPos / stepFrac + 0.5) * stepFrac;
+        effBufPos = snapped;
+        cast(void) fabs(0.0);
+      }
+    } else if (bufferEnabled && bufferMovement == BufferMovementMode.random) {
+      const uint h = (cast(uint) sliceIteration * 2654435761u) ^ 0x9e3779b9u;
+      effBufPos = ((h & 0xFFu) / 255.0) * (0.2 + 0.8 * effBufPos);
+    }
+    effBufPos = (effBufPos < 0.0) ? 0.0 : ((effBufPos > 1.0) ? 1.0 : effBufPos);
+
+    const double scrubOffset = effBufPos * maxScrubSamples;
     const double anchor = triggerWriteIndex - scrubOffset - sliceLength;
 
-    double localOffset;
-    if (currentDirection == +1) {
-      localOffset = slicePos;
-    } else {
-      localOffset = (sliceLength - 1.0) - slicePos;
-      if (localOffset < 0.0) localOffset = 0.0;
-    }
+    double localOffsetL = (dirL == +1) ? slicePos : ((sliceLength - 1.0) - slicePos);
+    if (localOffsetL < 0.0) localOffsetL = 0.0;
+    double localOffsetR = (dirR == +1) ? slicePos : ((sliceLength - 1.0) - slicePos);
+    if (localOffsetR < 0.0) localOffsetR = 0.0;
 
     const double stereoOffsetSamples = (stereoOffset * 0.001) * sampleRate;
-    const double posL = anchor + localOffset;
-    const double posR = anchor + localOffset + stereoOffsetSamples;
+    const double posL = anchor + localOffsetL;
+    const double posR = anchor + localOffsetR + stereoOffsetSamples;
 
     // 5. Read stutter audio with Hermite cubic interpolation
     float stutterL = 0.0f;
@@ -466,6 +611,15 @@ struct StutterEngine {
         sliceCrossfader.advance();
       } else {
         buf.readHermite(cast(float) posL, cast(float) posR, stutterL, stutterR);
+      }
+
+      // Apply Buffer Width & Center stereo M/S positioning when Buffer module is enabled
+      if (bufferEnabled && (fabs(bufferWidth - 1.0f) > 1e-3f || fabs(bufferCenter) > 1e-3f)) {
+        const float mid = 0.5f * (stutterL + stutterR);
+        const float side = 0.5f * (stutterL - stutterR) * bufferWidth;
+        const float panBias = bufferCenter * 0.5f;
+        stutterL = (mid + side) * (1.0f - panBias);
+        stutterR = (mid - side) * (1.0f + panBias);
       }
     } else {
       stutterL = inL;
@@ -501,6 +655,36 @@ struct StutterEngine {
           (cast(int)(sliceLength / 2.0) >= 2 ? cast(int)(sliceLength / 2.0) : 2) : XfadeLength;
 
       sliceCrossfader.start(posL, posR, speed, currentDirection, safeXfadeLen);
+
+      // Update stepped Stutter Quantize Mode index at slice boundaries
+      if (quantizeEnabled && !freezeActive) {
+        const int maxIdx = cast(int) straightSubdivisionBeats.length - 1;
+        const double rawTargetBeats = evaluateRampedBeats(rateStart, rateEnd, curveVal, StutterQuantizeMode.freeSweep);
+        const int goalIdx = closestSubdivisionIdx(rawTargetBeats);
+        final switch (stepMode) {
+          case StutterStepMode.walk:
+            if (currentStepIdx < goalIdx) currentStepIdx++;
+            else if (currentStepIdx > goalIdx) currentStepIdx--;
+            break;
+          case StutterStepMode.skip:
+            if (currentStepIdx < goalIdx) currentStepIdx = (currentStepIdx + 2 <= goalIdx) ? currentStepIdx + 2 : goalIdx;
+            else if (currentStepIdx > goalIdx) currentStepIdx = (currentStepIdx - 2 >= goalIdx) ? currentStepIdx - 2 : goalIdx;
+            break;
+          case StutterStepMode.stagger:
+            if (currentStepIdx < goalIdx) currentStepIdx++;
+            else if (currentStepIdx > goalIdx) currentStepIdx--;
+            break;
+          case StutterStepMode.random:
+            currentStepIdx = cast(int)(nextRand() % cast(uint)(maxIdx + 1));
+            break;
+          case StutterStepMode.closest:
+          case StutterStepMode.free:
+            currentStepIdx = goalIdx;
+            break;
+        }
+        if (currentStepIdx < 0) currentStepIdx = 0;
+        if (currentStepIdx > maxIdx) currentStepIdx = maxIdx;
+      }
 
       // Latch target slice duration for next repetition
       sliceLength = targetSliceLength;

@@ -93,11 +93,15 @@ nothrow @nogc:
   QuantizeGrid quantizeGrid = QuantizeGrid.instant;
   int baseMidiNote = DEFAULT_BASE_MIDI_NOTE;
   int defaultGestureIndex = 0;
+  bool palindrome = false;         // Ping-pong 0 -> 1 -> 0 gesture curve playback
+  bool stickMode = false;          // Toggle-latch on note-on ("Stick" release behavior)
+  bool freezeActive = false;       // Global Freeze pauses phase progression
 
   // --- Runtime State ---
   GestureState state = GestureState.idle;
   float phase = 0.0f;
   float prevPhase = 0.0f;
+  int palindromeDir = 1;
   int currentGestureIndex = 0;
   int pendingGestureIndex = 0;
   bool triggeredThisSample = false;
@@ -133,6 +137,7 @@ nothrow @nogc:
     this.state = this.autoMode ? GestureState.active : GestureState.idle;
     this.phase = 0.0f;
     this.prevPhase = 0.0f;
+    this.palindromeDir = 1;
     this.currentGestureIndex = this.defaultGestureIndex;
     this.pendingGestureIndex = 0;
     this.triggeredThisSample = false;
@@ -202,6 +207,7 @@ nothrow @nogc:
     this.state = GestureState.active;
     this.phase = 0.0f;
     this.prevPhase = 0.0f;
+    this.palindromeDir = 1;
     this.triggeredThisSample = true;
     this.noteHeldForActive = true;
     this.pendingHandover = false;
@@ -210,9 +216,10 @@ nothrow @nogc:
   /// Release manual gesture trigger.
   void releaseManual(double currentBeats) pure @safe {
     this.noteHeldForActive = false;
-    if (this.releaseMode == ReleaseMode.instant) {
+    if (this.releaseMode == ReleaseMode.instant && !this.stickMode) {
       this.state = GestureState.idle;
       this.phase = 0.0f;
+      this.palindromeDir = 1;
     }
   }
 
@@ -227,6 +234,7 @@ nothrow @nogc:
     if (!this.autoMode) {
       this.state = GestureState.idle;
       this.phase = 0.0f;
+      this.palindromeDir = 1;
     }
   }
 
@@ -268,6 +276,17 @@ nothrow @nogc:
 
     const int targetGesture = mapMidiNoteToGesture(note, this.baseMidiNote);
 
+    // Stick mode: re-pressing the active gesture key releases it
+    if (this.stickMode && !this.autoMode && this.state == GestureState.active &&
+        this.currentGestureIndex == targetGesture) {
+      this.state = GestureState.idle;
+      this.phase = 0.0f;
+      this.palindromeDir = 1;
+      this.noteHeldForActive = false;
+      this.pendingHandover = false;
+      return;
+    }
+
     // In Auto Mode, hitting a note changes the active gesture for the ongoing cycle
     if (this.autoMode) {
       this.currentGestureIndex = targetGesture;
@@ -282,6 +301,7 @@ nothrow @nogc:
       this.currentGestureIndex = targetGesture;
       this.phase = 0.0f;
       this.prevPhase = 0.0f;
+      this.palindromeDir = 1;
       this.triggeredThisSample = true;
       this.noteHeldForActive = true;
       this.pendingHandover = false;
@@ -295,6 +315,7 @@ nothrow @nogc:
       this.currentGestureIndex = targetGesture;
       this.phase = 0.0f;
       this.prevPhase = 0.0f;
+      this.palindromeDir = 1;
       this.triggeredThisSample = true;
       this.noteHeldForActive = true;
       this.pendingHandover = false;
@@ -336,7 +357,7 @@ nothrow @nogc:
       }
     }
 
-    if (this.autoMode) return;
+    if (this.autoMode || this.stickMode) return;
 
     // Polyphonic legato check: if other notes are still held, handover to previous note
     if (this.numHeldNotes > 0 && this.lastHeldNote >= 0) {
@@ -346,6 +367,7 @@ nothrow @nogc:
         this.currentGestureIndex = targetGesture;
         this.phase = 0.0f;
         this.prevPhase = 0.0f;
+        this.palindromeDir = 1;
         this.triggeredThisSample = true;
       } else {
         this.pendingHandover = true;
@@ -362,6 +384,7 @@ nothrow @nogc:
       if (this.releaseMode == ReleaseMode.instant) {
         this.state = GestureState.idle;
         this.phase = 0.0f;
+        this.palindromeDir = 1;
       }
       return;
     }
@@ -371,6 +394,7 @@ nothrow @nogc:
         case ReleaseMode.instant:
           this.state = GestureState.idle;
           this.phase = 0.0f;
+          this.palindromeDir = 1;
           this.pendingHandover = false;
           break;
         case ReleaseMode.latch:
@@ -384,6 +408,7 @@ nothrow @nogc:
           if (G <= 0.0) {
             this.state = GestureState.idle;
             this.phase = 0.0f;
+            this.palindromeDir = 1;
           } else {
             this.state = GestureState.pendingRelease;
             this.targetReleaseBeat = nextGridBoundary(currentBeats, G);
@@ -422,18 +447,40 @@ nothrow @nogc:
     // --- AUTO MODE ---
     if (this.autoMode) {
       this.state = GestureState.active;
-      const double L = (this.gestureBeats > 0.001) ? this.gestureBeats : 4.0;
-      double m = modBeats(currentBeats, L);
-      float newPhase = cast(float)(m / L);
-      if (newPhase < 0.0f) newPhase = 0.0f;
-      if (newPhase >= 1.0f) newPhase = 0.999999f;
+      if (!this.freezeActive) {
+        const double L = (this.gestureBeats > 0.001) ? this.gestureBeats : 4.0;
+        if (this.palindrome) {
+          const double m2 = modBeats(currentBeats, 2.0 * L);
+          float newPhase;
+          if (m2 < L) {
+            newPhase = cast(float)(m2 / L);
+            this.palindromeDir = 1;
+          } else {
+            newPhase = 1.0f - cast(float)((m2 - L) / L);
+            this.palindromeDir = -1;
+          }
+          if (newPhase < 0.0f) newPhase = 0.0f;
+          if (newPhase >= 1.0f) newPhase = 0.999999f;
+          if (this.palindromeDir == 1 && newPhase < 0.05f && this.prevPhase >= 0.05f && m2 < L * 0.1) {
+            wasTriggered = true;
+          }
+          this.prevPhase = newPhase;
+          this.phase = newPhase;
+        } else {
+          this.palindromeDir = 1;
+          double m = modBeats(currentBeats, L);
+          float newPhase = cast(float)(m / L);
+          if (newPhase < 0.0f) newPhase = 0.0f;
+          if (newPhase >= 1.0f) newPhase = 0.999999f;
 
-      // Detect loop boundary retrigger
-      if (newPhase < this.prevPhase - 0.5f) {
-        wasTriggered = true;
+          // Detect loop boundary retrigger
+          if (newPhase < this.prevPhase - 0.5f) {
+            wasTriggered = true;
+          }
+          this.prevPhase = newPhase;
+          this.phase = newPhase;
+        }
       }
-      this.prevPhase = newPhase;
-      this.phase = newPhase;
 
       gesturePhase = this.phase;
       isActive = true;
@@ -451,6 +498,7 @@ nothrow @nogc:
         this.currentGestureIndex = this.pendingGestureIndex;
         this.phase = 0.0f;
         this.prevPhase = 0.0f;
+        this.palindromeDir = 1;
         wasTriggered = true;
       }
     }
@@ -461,6 +509,7 @@ nothrow @nogc:
         this.currentGestureIndex = this.handoverGestureIndex;
         this.phase = 0.0f;
         this.prevPhase = 0.0f;
+        this.palindromeDir = 1;
         this.pendingHandover = false;
         wasTriggered = true;
       }
@@ -472,36 +521,67 @@ nothrow @nogc:
         this.state = GestureState.idle;
         this.phase = 0.0f;
         this.prevPhase = 0.0f;
+        this.palindromeDir = 1;
       }
     }
 
-    // 4. Advance phase if active or pending release
-    if (this.state == GestureState.active || this.state == GestureState.pendingRelease) {
+    // 4. Advance phase if active or pending release (paused when Freeze active)
+    if (!this.freezeActive && (this.state == GestureState.active || this.state == GestureState.pendingRelease)) {
       const double L = (this.gestureBeats > 0.001) ? this.gestureBeats : 4.0;
       const float phaseInc = cast(float)(safeBps / L);
-      this.phase += phaseInc;
+      const bool shouldLoop = (this.stickMode || this.releaseMode == ReleaseMode.latch ||
+                               this.numHeldNotes > 0 || this.noteHeldForActive);
 
-      if (this.phase >= 1.0f) {
-        if (this.state == GestureState.pendingRelease) {
-          this.state = GestureState.idle;
-          this.phase = 0.0f;
-        } else if (this.releaseMode == ReleaseMode.latch || this.numHeldNotes > 0 || this.noteHeldForActive) {
-          // Loop gesture
-          this.phase = cast(float)modBeats(this.phase, 1.0);
-          wasTriggered = true;
-        } else {
-          // No notes held and not latch
-          final switch (this.releaseMode) {
-            case ReleaseMode.fullGesture:
-            case ReleaseMode.onGrid:
-            case ReleaseMode.instant:
-              this.state = GestureState.idle;
-              this.phase = 0.0f;
-              break;
-            case ReleaseMode.latch:
-              this.phase = cast(float)modBeats(this.phase, 1.0);
-              wasTriggered = true;
-              break;
+      if (this.palindrome) {
+        this.phase += phaseInc * cast(float) this.palindromeDir;
+        if (this.phase >= 1.0f) {
+          if (this.state == GestureState.pendingRelease) {
+            this.state = GestureState.idle;
+            this.phase = 0.0f;
+            this.palindromeDir = 1;
+          } else {
+            this.phase = 2.0f - this.phase;
+            if (this.phase > 1.0f) this.phase = 1.0f;
+            this.palindromeDir = -1;
+          }
+        } else if (this.phase <= 0.0f) {
+          if (this.state == GestureState.pendingRelease || !shouldLoop) {
+            this.state = GestureState.idle;
+            this.phase = 0.0f;
+            this.palindromeDir = 1;
+          } else {
+            this.phase = -this.phase;
+            if (this.phase < 0.0f) this.phase = 0.0f;
+            this.palindromeDir = 1;
+            wasTriggered = true;
+          }
+        }
+      } else {
+        this.palindromeDir = 1;
+        this.phase += phaseInc;
+
+        if (this.phase >= 1.0f) {
+          if (this.state == GestureState.pendingRelease) {
+            this.state = GestureState.idle;
+            this.phase = 0.0f;
+          } else if (shouldLoop) {
+            // Loop gesture
+            this.phase = cast(float)modBeats(this.phase, 1.0);
+            wasTriggered = true;
+          } else {
+            // No notes held and not latch/stick
+            final switch (this.releaseMode) {
+              case ReleaseMode.fullGesture:
+              case ReleaseMode.onGrid:
+              case ReleaseMode.instant:
+                this.state = GestureState.idle;
+                this.phase = 0.0f;
+                break;
+              case ReleaseMode.latch:
+                this.phase = cast(float)modBeats(this.phase, 1.0);
+                wasTriggered = true;
+                break;
+            }
           }
         }
       }

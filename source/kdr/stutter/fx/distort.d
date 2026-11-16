@@ -43,7 +43,9 @@ struct DistortFX {
       float driveHigh,
       float tone,
       float mix,
-      bool enabled
+      bool enabled,
+      float dcOffset = 0.0f,
+      bool twoBand = true
   ) {
     if (isNaN(inL) || isInfinity(inL)) inL = 0.0f;
     if (isNaN(inR) || isInfinity(inR)) inR = 0.0f;
@@ -75,30 +77,49 @@ struct DistortFX {
     if (mix < 0.0f) mix = 0.0f;
     if (mix > 1.0f) mix = 1.0f;
 
-    if (fabs(crossoverHz - lastCrossoverHz) > 0.5f) {
-      crossover.setFrequency(crossoverHz, cast(float) sampleRate);
-      lastCrossoverHz = crossoverHz;
+    if (isNaN(dcOffset) || isInfinity(dcOffset)) dcOffset = 0.0f;
+    if (dcOffset < -1.0f) dcOffset = -1.0f;
+    if (dcOffset > 1.0f) dcOffset = 1.0f;
+
+    const float bias = dcOffset * 0.45f;
+    const float biasComp = fastTanh(bias);
+
+    float wetL, wetR;
+    if (!twoBand) {
+      // 1-Band Broadband Saturation (even harmonics from asymmetric bias)
+      const float gain = 1.0f + 0.5f * (driveLow + driveHigh) * 14.0f;
+      wetL = fastTanh(inL * gain + bias) - biasComp;
+      wetR = fastTanh(inR * gain + bias) - biasComp;
+      if (tone > 0.0f) {
+        wetL *= (1.0f - 0.15f * tone) + 0.15f * tone * (1.0f + 0.25f * fabs(wetL));
+        wetR *= (1.0f - 0.15f * tone) + 0.15f * tone * (1.0f + 0.25f * fabs(wetR));
+      }
+    } else {
+      if (fabs(crossoverHz - lastCrossoverHz) > 0.5f) {
+        crossover.setFrequency(crossoverHz, cast(float) sampleRate);
+        lastCrossoverHz = crossoverHz;
+      }
+
+      float lpL, lpR, hpL, hpR;
+      crossover.process(inL, inR, lpL, lpR, hpL, hpR);
+
+      // Low band warm saturation with optional asymmetric bias
+      const float gainLow = 1.0f + driveLow * 11.0f;
+      const float satLowL = fastTanh(lpL * gainLow + bias * 0.5f) - fastTanh(bias * 0.5f);
+      const float satLowR = fastTanh(lpR * gainLow + bias * 0.5f) - fastTanh(bias * 0.5f);
+
+      // High band aggressive harmonic saturation with optional asymmetric bias
+      const float gainHigh = 1.0f + driveHigh * 15.0f;
+      const float satHighL = fastTanh(hpL * gainHigh + 0.1f * driveHigh * hpL * hpL + bias) - biasComp;
+      const float satHighR = fastTanh(hpR * gainHigh - 0.1f * driveHigh * hpR * hpR + bias) - biasComp;
+
+      // Tilt tone balance between low and high bands
+      const float lowWeight  = (tone <= 0.0f) ? 1.0f : (1.0f - 0.5f * tone);
+      const float highWeight = (tone >= 0.0f) ? 1.0f : (1.0f + 0.5f * tone);
+
+      wetL = fastTanh(satLowL * lowWeight + satHighL * highWeight);
+      wetR = fastTanh(satLowR * lowWeight + satHighR * highWeight);
     }
-
-    float lpL, lpR, hpL, hpR;
-    crossover.process(inL, inR, lpL, lpR, hpL, hpR);
-
-    // Low band warm saturation
-    const float gainLow = 1.0f + driveLow * 11.0f;
-    const float satLowL = fastTanh(lpL * gainLow);
-    const float satLowR = fastTanh(lpR * gainLow);
-
-    // High band aggressive harmonic saturation
-    const float gainHigh = 1.0f + driveHigh * 15.0f;
-    const float satHighL = fastTanh(hpL * gainHigh + 0.1f * driveHigh * hpL * hpL);
-    const float satHighR = fastTanh(hpR * gainHigh - 0.1f * driveHigh * hpR * hpR);
-
-    // Tilt tone balance between low and high bands
-    const float lowWeight  = (tone <= 0.0f) ? 1.0f : (1.0f - 0.5f * tone);
-    const float highWeight = (tone >= 0.0f) ? 1.0f : (1.0f + 0.5f * tone);
-
-    const float wetL = fastTanh(satLowL * lowWeight + satHighL * highWeight);
-    const float wetR = fastTanh(satLowR * lowWeight + satHighR * highWeight);
 
     outL = inL * (1.0f - mix) + wetL * mix;
     outR = inR * (1.0f - mix) + wetR * mix;

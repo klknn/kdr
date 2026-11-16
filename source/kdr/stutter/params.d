@@ -383,23 +383,23 @@ static immutable string[] moduleSlotNames = [
   "LIMITER",
 ];
 
-/// Color coding for left module rack and TVM curve displays
+/// Color coding for left module rack and TVM curve displays (unified violet/indigo/orchid theme)
 static immutable uint[] moduleColors = [
-  0x00E5FF, // Stutter: Cyan
-  0x00A3FF, // Buffer: Deep Sky Blue
-  0x00F5D4, // Gate: Teal
-  0x00F090, // Pan: Spring Green
-  0x76FF03, // Tape Stop: Neon Lime
-  0xFFD600, // Filter: Amber
-  0xFF9100, // Lo-Fi: Bright Orange
-  0xFF3D00, // Distort: Coral Red
-  0xFF1493, // Comb: Hot Pink
-  0xD500F9, // Chorus: Violet Magenta
-  0x9D4EDD, // Flanger: Electric Purple
-  0x651FFF, // Phaser: Neon Indigo
-  0x00B4D8, // Reverb: Ocean Blue
-  0x2EC4B6, // Delay: Aquamarine
-  0xE2E8F0, // Limiter: Silver
+  0xB066FF, // Stutter: Signature Electric Violet
+  0x8B74FF, // Buffer: Royal Indigo-Periwinkle
+  0xC86BFF, // Gate: Bright Orchid
+  0xA47EFF, // Pan: Soft Iris Purple
+  0xE066D0, // Tape Stop: Neon Plum-Magenta
+  0x9E68FF, // Filter: Deep Amethyst
+  0xD678FF, // Lo-Fi: Light Mauve-Pink
+  0xF058B8, // Distort: Rose-Magenta
+  0xB688FF, // Comb: Pastel Violet
+  0x9B5DE5, // Chorus: Rich Lavender-Violet
+  0x7E72FF, // Flanger: Blue-Violet Indigo
+  0x6A82FF, // Phaser: Periwinkle Indigo
+  0x8898FF, // Reverb: Moonlight Indigo
+  0xC29BFF, // Delay: Pale Lilac
+  0xD8B4FE, // Limiter: Soft Violet Silver
 ];
 
 // =============================================================================

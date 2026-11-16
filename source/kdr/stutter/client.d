@@ -21,21 +21,106 @@ import dplug.core : mallocNew, makeVec, Vec;
 
 import kdr.params : buildParams;
 import kdr.stutter.params : Params, ReleaseMode, QuantizeGrid, BufferDirection,
-  StutterSubdivision, StutterQuantizeMode, autoRateBeats, gestureLengthBeats;
+  StutterSubdivision, StutterQuantizeMode, FilterType, autoRateBeats, gestureLengthBeats;
 import kdr.stutter.buffer : StereoCaptureBuffer;
-import kdr.stutter.stutter : StutterEngine;
+import kdr.stutter.stutter : StutterEngine, StutterStepMode, BufferMovementMode, JitterPitchMode;
 import kdr.stutter.gesture : GestureController;
-import kdr.stutter.tvm : TVMModulationEngine, TVMModuleSlot, NumTVMModuleSlots, TVMCurve, evaluateModulatedParam;
-import kdr.stutter.fx : StutterFXRack;
+import kdr.stutter.tvm : TVMModulationEngine, TVMModuleSlot, NumTVMModuleSlots, TVMCurve,
+  ExtendedTVMBank, TVMParamState, evaluateModulatedParam;
+import kdr.stutter.fx : StutterFXRack, ChainFXId, NumChainFX, defaultSignalChainOrder;
+import kdr.stutter.presets : NUM_BT_GESTURES, btGestureBank, applyBTGesturePreset;
 import kdr.stutter.gui : StutterGUI;
+
+/// Snapshot used by the lightweight @nogc Undo/Redo history stack.
+struct ClientSnapshot {
+  float[137] paramNorms;
+  ChainFXId[NumChainFX] chainOrder;
+  float globalFilterDial = 0.0f;
+  bool palindrome = false;
+  bool freezeActive = false;
+  float freezeBeats = 0.25f;
+  int stutterStepMode = StutterStepMode.closest;
+  bool stutterQuantizeEnabled = true;
+  bool bufferReverseL = false;
+  bool bufferReverseR = false;
+  int bufferMovement = BufferMovementMode.slider;
+  bool highpassEnable = false;
+  float highpassCutoffMin = 120.0f;
+  float highpassCutoffMax = 4500.0f;
+  bool distortTwoBand = true;
+  float distortDcOffset = 0.0f;
+  bool wetGainEnable = true;
+  float wetGainDb = 0.0f;
+  bool dryGainEnable = false;
+  float dryGainDb = 0.0f;
+  int activeGestureBankIdx = 0;
+}
 
 /// StutterClient audio effect client.
 class StutterClient : Client {
 public:
   nothrow @nogc:
 
+  // =========================================================================
+  // BT Stutter Edit 2 Extended State (Shared between Audio DSP & GUI)
+  // =========================================================================
+  ChainFXId[NumChainFX] signalChainOrder = defaultSignalChainOrder;
+
+  // Top Header Global Controls
+  int activeGestureBankIdx = 0;
+  bool palindrome = false;
+  bool stickMode = false;
+  bool freezeActive = false;
+  float freezeBeats = 0.25f;
+  float globalFilterDial = 0.0f; // [-1..+1]: 0=OFF, <0=LP, >0=HP
+  float midiPitchBend = 0.0f;    // [-1..+1] from MIDI Pitch Bend
+
+  // Stutter Strip Extensions
+  bool stutterQuantizeEnabled = true;
+  StutterStepMode stutterStepMode = StutterStepMode.closest;
+  float stutterStepBeats = 0.25f;
+  float stutterTailMix = 1.0f;
+
+  // Buffer Strip Extensions
+  bool bufferReverseL = false;
+  bool bufferReverseR = false;
+  bool bufferLinkLR = true;
+  BufferMovementMode bufferMovement = BufferMovementMode.slider;
+  float bufferGridBeats = 0.25f;
+  float bufferWidth = 1.0f;
+  float bufferCenter = 0.0f;
+  bool jitterEnabled = false;
+  JitterPitchMode jitterPitchMode = JitterPitchMode.octaves;
+  float jitterRhythmAmount = 0.0f;
+  float jitterPitchAmount = 0.0f;
+  float jitterRate = 0.25f;
+  float jitterOffset = 0.0f;
+
+  // Highpass FX Module (10th module in BT Stutter Edit 2 chain)
+  bool highpassEnable = false;
+  float highpassCutoffMin = 120.0f;
+  float highpassCutoffMax = 4500.0f;
+  float highpassRes = 0.3f;
+  float highpassMix = 1.0f;
+  int highpassPoles = 0; // 0 = 12 dB/oct, 1 = 24 dB/oct
+
+  // Distort FX Extensions (1-Band/2-Band + Asymmetric DC Offset)
+  bool distortTwoBand = true;
+  float distortDcOffset = 0.0f;
+
+  // Output Section Wet/Dry Gains
+  bool wetGainEnable = true;
+  float wetGainDb = 0.0f;
+  bool dryGainEnable = false;
+  float dryGainDb = 0.0f;
+
+  // Extended Per-Parameter TVM Curve States
+  ExtendedTVMBank extTvmBank;
+
   this() {
     super();
+    extTvmBank.resetAll();
+    signalChainOrder = defaultSignalChainOrder;
   }
 
   override PluginInfo buildPluginInfo() {
@@ -76,6 +161,8 @@ public:
       _fxRack.gate.reset(_sampleRate);
       _fxRack.pan.reset(_sampleRate);
       _fxRack.filter.reset(_sampleRate);
+      _fxRack.highpass.reset(_sampleRate);
+      _fxRack.globalFilter.reset(_sampleRate);
       _fxRack.lofi.reset(_sampleRate);
       _fxRack.distort.reset(_sampleRate);
       _fxRack.comb.reset(_sampleRate);
@@ -91,6 +178,9 @@ public:
     _lastStutterTension = float.nan;
     _lastBufferCurve = -1;
     _lastBufferTension = float.nan;
+    _lastSlotCurves[] = -1;
+    _lastSlotTensions[] = float.nan;
+    midiPitchBend = 0.0f;
     _peakL = 0.0f;
     _peakR = 0.0f;
   }
@@ -123,13 +213,17 @@ public:
     const bool reverbEnable   = readParam!bool(Params.reverbEnable);
     const bool delayEnable    = readParam!bool(Params.delayEnable);
 
+    const float effGlobalFilterPre = clampBipolar(globalFilterDial + midiPitchBend);
+    const bool globalFilterActive = fabs(effGlobalFilterPre) > 0.01f;
+
     const bool anyPostFXEnabled = gateEnable || panEnable || tapeStopEnable || filterEnable ||
-                                  lofiEnable || distortEnable || combEnable || chorusEnable ||
-                                  flangerEnable || phaserEnable || reverbEnable || delayEnable;
+                                  highpassEnable || lofiEnable || distortEnable || combEnable ||
+                                  chorusEnable || flangerEnable || phaserEnable || reverbEnable ||
+                                  delayEnable || globalFilterActive;
 
     // Determine if gesture or stutter engine should run
     const bool shouldRunGesture = isAutoRunning || hasMidiNotes || (numMidi > 0) ||
-                                  _gesture.getIsActive() || _stutter.isStuttering();
+                                  freezeActive || _gesture.getIsActive() || _stutter.isStuttering();
 
     if (!shouldRunGesture && !anyPostFXEnabled) {
       // Idle state: continuously capture input audio into circular history buffer
@@ -156,7 +250,7 @@ public:
 
     _fxRackDirty = true;
 
-    // Active state: DSP gesture, stutter engine, and 11 FX + Delay + Limiter processing
+    // Active state: DSP gesture, stutter engine, and 11 FX + Global Filter + Limiter processing
     const double tempo = (info.tempo > 0.0 && isFinite(info.tempo)) ? info.tempo : 120.0;
     _stutter.setTempo(tempo);
     _fxRack.setTempo(tempo);
@@ -178,9 +272,18 @@ public:
       }
     }
     _gesture.setParams(autoMode, releaseMode, gestureBeats, quantizeGrid);
+    _gesture.palindrome = palindrome;
+    _gesture.stickMode = stickMode;
+    _gesture.freezeActive = freezeActive;
 
     const bool stutterEnable = readParam!bool(Params.stutterEnable);
     _stutter.enabled = stutterEnable;
+    _stutter.quantizeEnabled = stutterQuantizeEnabled;
+    _stutter.stepMode = stutterStepMode;
+    _stutter.stepBeats = stutterStepBeats;
+    _stutter.freezeActive = freezeActive;
+    _stutter.freezeBeats = freezeBeats;
+
     const int rateStart = readParam!int(Params.stutterRateStart);
     const int rateEnd = readParam!int(Params.stutterRateEnd);
     const int quantizeMode = readParam!int(Params.stutterQuantize);
@@ -218,6 +321,20 @@ public:
       }
       _lastBufferTension = bufferTension;
     }
+
+    _stutter.bufferEnabled = bufferEnable;
+    _stutter.reverseL = bufferEnable ? bufferReverseL : false;
+    _stutter.reverseR = bufferEnable ? bufferReverseR : false;
+    _stutter.bufferMovement = bufferMovement;
+    _stutter.bufferGridBeats = bufferGridBeats;
+    _stutter.bufferWidth = bufferEnable ? bufferWidth : 1.0f;
+    _stutter.bufferCenter = bufferEnable ? bufferCenter : 0.0f;
+    _stutter.jitterEnabled = jitterEnabled;
+    _stutter.jitterPitchMode = jitterPitchMode;
+    _stutter.jitterRhythmAmount = jitterRhythmAmount;
+    _stutter.jitterPitchAmount = jitterPitchAmount;
+    _stutter.jitterRate = jitterRate;
+    _stutter.jitterOffset = jitterOffset;
 
     if (!bufferEnable) {
       directionMode = BufferDirection.forward;
@@ -365,6 +482,8 @@ public:
     const float dryWet = readParam!float(Params.masterDryWet);
     const float gainDb = readParam!float(Params.masterOutputGain);
     const float outGain = convertDecibelToLinearGain(gainDb);
+    const float wetLin = wetGainEnable ? convertDecibelToLinearGain(wetGainDb) : 0.0f;
+    const float dryAddLin = dryGainEnable ? convertDecibelToLinearGain(dryGainDb) : 0.0f;
 
     int midiIdx = 0;
 
@@ -374,7 +493,12 @@ public:
 
       // Dispatch MIDI events occurring at or before this frame
       while (midiIdx < numMidi && midiMessages[midiIdx].offset <= f) {
-        _gesture.handleMidi(midiMessages[midiIdx], songBeats);
+        const ref msg = midiMessages[midiIdx];
+        if (msg.isPitchBend()) {
+          midiPitchBend = msg.pitchBend();
+        } else {
+          _gesture.handleMidi(msg, songBeats);
+        }
         midiIdx++;
       }
 
@@ -401,9 +525,9 @@ public:
       // Synchronize StutterEngine trigger / release with gesture
       if (justTriggered) {
         _stutter.trigger(_buffer.writePos(), smoothedPos);
-      } else if (isGestureActive && !_stutter.active) {
+      } else if ((isGestureActive || freezeActive) && !_stutter.active) {
         _stutter.trigger(_buffer.writePos(), smoothedPos);
-      } else if (!isGestureActive && _stutter.active) {
+      } else if (!isGestureActive && !freezeActive && _stutter.active) {
         _stutter.release();
       }
 
@@ -427,94 +551,144 @@ public:
                        gesturePhase, cast(float) rateStart, cast(float) rateEnd, rateCurve,
                        quantizeMode, directionMode, pitchRatio, stereoOffset);
 
-      // Run 11 Post-FX + End-of-Chain Delay when enabled
-      if (anyPostFXEnabled) {
-        if (gateEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.gate].evaluate(gesturePhase);
-          const float w = _tvmEngine.smoothGateWidth.nextSample(
-            evaluateModulatedParam(true, isGestureActive, gateWMin, gateWMin, gateWMax, cv));
-          _fxRack.gate.process(sigL, sigR, sigL, sigR, gateSubdiv, w, gateTail, gateMix, true);
-        }
-        if (panEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.pan].evaluate(gesturePhase);
-          const float c = _tvmEngine.smoothPanCenter.nextSample(
-            evaluateModulatedParam(true, isGestureActive, panCMin, panCMin, panCMax, cv));
-          const float w = _tvmEngine.smoothPanWidth.nextSample(
-            evaluateModulatedParam(true, isGestureActive, panWMin, panWMin, panWMax, cv));
-          _fxRack.pan.process(sigL, sigR, sigL, sigR, c, w, panMix, true);
-        }
-        if (tapeStopEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.tapeStop].evaluate(gesturePhase);
-          const float s = _tvmEngine.smoothTapeSlowdown.nextSample(
-            evaluateModulatedParam(true, isGestureActive, tapeSMin, tapeSMin, tapeSMax, cv));
-          _fxRack.tapeStop.process(sigL, sigR, sigL, sigR, s, tapePlunge, tapeMix, true);
-        }
-        if (filterEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.filter].evaluate(gesturePhase);
-          const float cut = _tvmEngine.smoothFilterCutoff.nextSample(
-            evaluateModulatedParam(true, isGestureActive, filtCMin, filtCMin, filtCMax, cv, true));
-          _fxRack.filter.process(sigL, sigR, sigL, sigR, filtType, cut, filtRes, filtDrive, filtMix, true);
-        }
-        if (lofiEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.lofi].evaluate(gesturePhase);
-          const float bits = _tvmEngine.smoothLofiBits.nextSample(
-            evaluateModulatedParam(true, isGestureActive, lofiBMin, lofiBMin, lofiBMax, cv));
-          const float ds = _tvmEngine.smoothLofiDownsample.nextSample(
-            evaluateModulatedParam(true, isGestureActive, lofiDMin, lofiDMin, lofiDMax, cv, true));
-          _fxRack.lofi.process(sigL, sigR, sigL, sigR, bits, ds, lofiGrit, lofiMix, true);
-        }
-        if (distortEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.distort].evaluate(gesturePhase);
-          const float dL = _tvmEngine.smoothDistortDriveLow.nextSample(
-            evaluateModulatedParam(true, isGestureActive, distLMin, distLMin, distLMax, cv));
-          const float dH = _tvmEngine.smoothDistortDriveHigh.nextSample(
-            evaluateModulatedParam(true, isGestureActive, distHMin, distHMin, distHMax, cv));
-          _fxRack.distort.process(sigL, sigR, sigL, sigR, distXover, dL, dH, distTone, distMix, true);
-        }
-        if (combEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.comb].evaluate(gesturePhase);
-          const float fq = _tvmEngine.smoothCombFreq.nextSample(
-            evaluateModulatedParam(true, isGestureActive, combFMin, combFMin, combFMax, cv, true));
-          _fxRack.comb.process(sigL, sigR, sigL, sigR, fq, combFb, combDamp, combPhase, combMix, true);
-        }
-        if (chorusEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.chorus].evaluate(gesturePhase);
-          const float dp = _tvmEngine.smoothChorusDepth.nextSample(
-            evaluateModulatedParam(true, isGestureActive, chorDMin, chorDMin, chorDMax, cv));
-          _fxRack.chorus.process(sigL, sigR, sigL, sigR, chorRate, dp, chorFb, chorWidth, chorMix, true);
-        }
-        if (flangerEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.flanger].evaluate(gesturePhase);
-          const float dp = _tvmEngine.smoothFlangerDepth.nextSample(
-            evaluateModulatedParam(true, isGestureActive, flangDMin, flangDMin, flangDMax, cv));
-          _fxRack.flanger.process(sigL, sigR, sigL, sigR, flangRate, dp, flangFb, flangPhase, flangMix, true);
-        }
-        if (phaserEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.phaser].evaluate(gesturePhase);
-          const float ct = _tvmEngine.smoothPhaserCenter.nextSample(
-            evaluateModulatedParam(true, isGestureActive, phasCMin, phasCMin, phasCMax, cv, true));
-          _fxRack.phaser.process(sigL, sigR, sigL, sigR, phasRate, phasStages, ct, phasFb, phasMix, true);
-        }
-        if (reverbEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.reverb].evaluate(gesturePhase);
-          const float sz = _tvmEngine.smoothReverbSize.nextSample(
-            evaluateModulatedParam(true, isGestureActive, revSMin, revSMin, revSMax, cv));
-          _fxRack.reverb.process(sigL, sigR, sigL, sigR, sz, revDamp, revPre, revFreeze, revMix, true);
-        }
-        if (delayEnable) {
-          const float cv = _tvmEngine.curves[TVMModuleSlot.delay].evaluate(gesturePhase);
-          const float fb = _tvmEngine.smoothDelayFeedback.nextSample(
-            evaluateModulatedParam(true, isGestureActive, delFbMin, delFbMin, delFbMax, cv));
-          _fxRack.delay.process(sigL, sigR, sigL, sigR, delTimeL, delTimeR, fb, delCross, delDamp, delMix, true);
+      // Core rhythmic Gate (from Stutter strip) & Pan (from Buffer strip)
+      if (gateEnable) {
+        const float cv = _tvmEngine.curves[TVMModuleSlot.gate].evaluate(gesturePhase);
+        const float w = _tvmEngine.smoothGateWidth.nextSample(
+          evaluateModulatedParam(true, isGestureActive, gateWMin, gateWMin, gateWMax, cv));
+        _fxRack.gate.process(sigL, sigR, sigL, sigR, gateSubdiv, w, gateTail, gateMix, true);
+      }
+      if (panEnable) {
+        const float cv = _tvmEngine.curves[TVMModuleSlot.pan].evaluate(gesturePhase);
+        const float c = _tvmEngine.smoothPanCenter.nextSample(
+          evaluateModulatedParam(true, isGestureActive, panCMin, panCMin, panCMax, cv));
+        const float w = _tvmEngine.smoothPanWidth.nextSample(
+          evaluateModulatedParam(true, isGestureActive, panWMin, panWMin, panWMax, cv));
+        _fxRack.pan.process(sigL, sigR, sigL, sigR, c, w, panMix, true);
+      }
+
+      // Run 11-module dynamically ordered Signal Chain FX
+      foreach (ChainFXId fxId; signalChainOrder) {
+        final switch (fxId) {
+          case ChainFXId.distort:
+            if (distortEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.distort].evaluate(gesturePhase);
+              const float dL = _tvmEngine.smoothDistortDriveLow.nextSample(
+                evaluateModulatedParam(true, isGestureActive, distLMin, distLMin, distLMax, cv));
+              const float dH = _tvmEngine.smoothDistortDriveHigh.nextSample(
+                evaluateModulatedParam(true, isGestureActive, distHMin, distHMin, distHMax, cv));
+              _fxRack.distort.process(sigL, sigR, sigL, sigR, distXover, dL, dH, distTone, distMix, true,
+                                      distortDcOffset, distortTwoBand);
+            }
+            break;
+          case ChainFXId.lofi:
+            if (lofiEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.lofi].evaluate(gesturePhase);
+              const float bits = _tvmEngine.smoothLofiBits.nextSample(
+                evaluateModulatedParam(true, isGestureActive, lofiBMin, lofiBMin, lofiBMax, cv));
+              const float ds = _tvmEngine.smoothLofiDownsample.nextSample(
+                evaluateModulatedParam(true, isGestureActive, lofiDMin, lofiDMin, lofiDMax, cv, true));
+              _fxRack.lofi.process(sigL, sigR, sigL, sigR, bits, ds, lofiGrit, lofiMix, true);
+            }
+            break;
+          case ChainFXId.chorus:
+            if (chorusEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.chorus].evaluate(gesturePhase);
+              const float dp = _tvmEngine.smoothChorusDepth.nextSample(
+                evaluateModulatedParam(true, isGestureActive, chorDMin, chorDMin, chorDMax, cv));
+              _fxRack.chorus.process(sigL, sigR, sigL, sigR, chorRate, dp, chorFb, chorWidth, chorMix, true);
+            }
+            break;
+          case ChainFXId.comb:
+            if (combEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.comb].evaluate(gesturePhase);
+              const float fq = _tvmEngine.smoothCombFreq.nextSample(
+                evaluateModulatedParam(true, isGestureActive, combFMin, combFMin, combFMax, cv, true));
+              _fxRack.comb.process(sigL, sigR, sigL, sigR, fq, combFb, combDamp, combPhase, combMix, true);
+            }
+            break;
+          case ChainFXId.reverb:
+            if (reverbEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.reverb].evaluate(gesturePhase);
+              const float sz = _tvmEngine.smoothReverbSize.nextSample(
+                evaluateModulatedParam(true, isGestureActive, revSMin, revSMin, revSMax, cv));
+              _fxRack.reverb.process(sigL, sigR, sigL, sigR, sz, revDamp, revPre, revFreeze, revMix, true);
+            }
+            break;
+          case ChainFXId.flanger:
+            if (flangerEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.flanger].evaluate(gesturePhase);
+              const float dp = _tvmEngine.smoothFlangerDepth.nextSample(
+                evaluateModulatedParam(true, isGestureActive, flangDMin, flangDMin, flangDMax, cv));
+              _fxRack.flanger.process(sigL, sigR, sigL, sigR, flangRate, dp, flangFb, flangPhase, flangMix, true);
+            }
+            break;
+          case ChainFXId.phaser:
+            if (phaserEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.phaser].evaluate(gesturePhase);
+              const float ct = _tvmEngine.smoothPhaserCenter.nextSample(
+                evaluateModulatedParam(true, isGestureActive, phasCMin, phasCMin, phasCMax, cv, true));
+              _fxRack.phaser.process(sigL, sigR, sigL, sigR, phasRate, phasStages, ct, phasFb, phasMix, true);
+            }
+            break;
+          case ChainFXId.lowpass:
+            if (filterEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.filter].evaluate(gesturePhase);
+              const float cut = _tvmEngine.smoothFilterCutoff.nextSample(
+                evaluateModulatedParam(true, isGestureActive, filtCMin, filtCMin, filtCMax, cv, true));
+              _fxRack.filter.process(sigL, sigR, sigL, sigR, filtType, cut, filtRes, filtDrive, filtMix, true);
+            }
+            break;
+          case ChainFXId.tapestop:
+            if (tapeStopEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.tapeStop].evaluate(gesturePhase);
+              const float s = _tvmEngine.smoothTapeSlowdown.nextSample(
+                evaluateModulatedParam(true, isGestureActive, tapeSMin, tapeSMin, tapeSMax, cv));
+              _fxRack.tapeStop.process(sigL, sigR, sigL, sigR, s, tapePlunge, tapeMix, true);
+            }
+            break;
+          case ChainFXId.highpass:
+            if (highpassEnable) {
+              const float cv = extTvmBank.evaluateParam(14, 0, gesturePhase);
+              const float cut = evaluateModulatedParam(true, isGestureActive,
+                highpassCutoffMin, highpassCutoffMin, highpassCutoffMax, cv, true);
+              _fxRack.highpass.process(sigL, sigR, sigL, sigR, cut, highpassRes, highpassMix, true, highpassPoles);
+            }
+            break;
+          case ChainFXId.delay:
+            if (delayEnable) {
+              const float cv = _tvmEngine.curves[TVMModuleSlot.delay].evaluate(gesturePhase);
+              const float fb = _tvmEngine.smoothDelayFeedback.nextSample(
+                evaluateModulatedParam(true, isGestureActive, delFbMin, delFbMin, delFbMax, cv));
+              _fxRack.delay.process(sigL, sigR, sigL, sigR, delTimeL, delTimeR, fb, delCross, delDamp, delMix, true);
+            }
+            break;
         }
       }
 
-      // Dry / wet mix and master output gain
-      float outL = (inL * (1.0f - dryWet) + sigL * dryWet) * outGain;
-      float outR = (inR * (1.0f - dryWet) + sigR * dryWet) * outGain;
+      // Apply Global Performance Filter (Bipolar LP <- 0 -> HP, controllable via Dial or MIDI Pitch Bend)
+      const float effGlobalFilter = clampBipolar(globalFilterDial + midiPitchBend);
+      if (effGlobalFilter < -0.01f) {
+        const float lpCut = 20_000.0f * exp2(effGlobalFilter * 7.4f); // 20 kHz -> ~118 Hz
+        _fxRack.globalFilter.process(sigL, sigR, sigL, sigR, FilterType.lowpass24Ladder, lpCut, 0.32f, 0.0f, 1.0f, true);
+      } else if (effGlobalFilter > 0.01f) {
+        const float hpCut = 30.0f * exp2(effGlobalFilter * 8.6f); // 30 Hz -> ~11.6 kHz
+        _fxRack.globalFilter.process(sigL, sigR, sigL, sigR, FilterType.highpass12, hpCut, 0.28f, 0.0f, 1.0f, true);
+      }
+
+      // Dry / wet mix, Wet/Dry Output section gains, and master output gain
+      const float wetScaledL = sigL * wetLin;
+      const float wetScaledR = sigR * wetLin;
+      float outL = (inL * (1.0f - dryWet) + wetScaledL * dryWet) * outGain;
+      float outR = (inR * (1.0f - dryWet) + wetScaledR * dryWet) * outGain;
+      if (dryGainEnable) {
+        outL += inL * dryAddLin * outGain;
+        outR += inR * dryAddLin * outGain;
+      }
 
       // Master brickwall safety limiter
-      if (anyPostFXEnabled || fabs(outL) > 0.99f || fabs(outR) > 0.99f) {
+      if (anyPostFXEnabled || freezeActive || wetGainEnable && wetGainDb != 0.0f ||
+          fabs(outL) > 0.99f || fabs(outR) > 0.99f) {
         _fxRack.limiter.process(outL, outR, outL, outR, limThresh, limCeiling, limRelease, limEnable);
       }
 
@@ -532,7 +706,12 @@ public:
     // Process any trailing MIDI events with offset >= frames
     while (midiIdx < numMidi) {
       const double songBeats = (info.timeInSamples + frames) * beatPerSample;
-      _gesture.handleMidi(midiMessages[midiIdx], songBeats);
+      const ref msg = midiMessages[midiIdx];
+      if (msg.isPitchBend()) {
+        midiPitchBend = msg.pitchBend();
+      } else {
+        _gesture.handleMidi(msg, songBeats);
+      }
       midiIdx++;
     }
 
@@ -544,6 +723,98 @@ public:
     }
   }
 
+  // =========================================================================
+  // Signal Chain Manipulation, Gesture Selection & Undo/Redo Helpers
+  // =========================================================================
+
+  /// Reorders the 11-module Signal Chain by moving `fromIdx` to `toIdx`.
+  void moveSignalChain(int fromIdx, int toIdx) pure @safe {
+    if (fromIdx < 0 || fromIdx >= NumChainFX || toIdx < 0 || toIdx >= NumChainFX) return;
+    if (fromIdx == toIdx) return;
+    const ChainFXId moved = signalChainOrder[fromIdx];
+    if (fromIdx < toIdx) {
+      for (int i = fromIdx; i < toIdx; ++i) {
+        signalChainOrder[i] = signalChainOrder[i + 1];
+      }
+    } else {
+      for (int i = fromIdx; i > toIdx; --i) {
+        signalChainOrder[i] = signalChainOrder[i - 1];
+      }
+    }
+    signalChainOrder[toIdx] = moved;
+  }
+
+  void swapSignalChain(int slotA, int slotB) pure @safe {
+    if (slotA < 0 || slotA >= NumChainFX || slotB < 0 || slotB >= NumChainFX) return;
+    const ChainFXId tmp = signalChainOrder[slotA];
+    signalChainOrder[slotA] = signalChainOrder[slotB];
+    signalChainOrder[slotB] = tmp;
+  }
+
+  void resetSignalChainOrder() pure @safe {
+    signalChainOrder = defaultSignalChainOrder;
+  }
+
+  /// Selects a gesture from the 24-note BT Gesture Bank (`0..23`) and optionally loads its settings.
+  void selectGestureBank(int idx, bool applySettings = true) nothrow @nogc {
+    int g = idx % NUM_BT_GESTURES;
+    if (g < 0) g += NUM_BT_GESTURES;
+    if (!applySettings) {
+      activeGestureBankIdx = g;
+      _gesture.currentGestureIndex = g;
+      return;
+    }
+
+    pushUndoSnapshot();
+    activeGestureBankIdx = g;
+    _gesture.currentGestureIndex = g;
+    applyBTGesturePreset(params(), g);
+    const ref entry = btGestureBank[g];
+    palindrome = entry.palindrome;
+    freezeActive = entry.freezeDefault;
+    stutterStepBeats = entry.stutterStepBeats;
+    stutterStepMode = cast(StutterStepMode) entry.stutterStepMode;
+    highpassEnable = entry.highpassEnable;
+    highpassCutoffMin = entry.highpassCutoff;
+    distortTwoBand = entry.distortTwoBand;
+    distortDcOffset = entry.distortDcOffset;
+  }
+
+  /// Captures current plugin state onto the Undo stack.
+  void pushUndoSnapshot() nothrow @nogc {
+    ClientSnapshot snap = captureSnapshot();
+    if (_undoCount < MaxUndoHistory) {
+      _undoStack[_undoCount++] = snap;
+    } else {
+      for (int i = 1; i < MaxUndoHistory; ++i) {
+        _undoStack[i - 1] = _undoStack[i];
+      }
+      _undoStack[MaxUndoHistory - 1] = snap;
+    }
+    _redoCount = 0;
+  }
+
+  bool canUndo() const pure @safe { return _undoCount > 0; }
+  bool canRedo() const pure @safe { return _redoCount > 0; }
+
+  void undo() nothrow @nogc {
+    if (_undoCount <= 0) return;
+    if (_redoCount < MaxUndoHistory) {
+      _redoStack[_redoCount++] = captureSnapshot();
+    }
+    ClientSnapshot snap = _undoStack[--_undoCount];
+    restoreSnapshot(snap);
+  }
+
+  void redo() nothrow @nogc {
+    if (_redoCount <= 0) return;
+    if (_undoCount < MaxUndoHistory) {
+      _undoStack[_undoCount++] = captureSnapshot();
+    }
+    ClientSnapshot snap = _redoStack[--_redoCount];
+    restoreSnapshot(snap);
+  }
+
   /// Direct engine accessors for unit testing, GUI telemetry, and inspection
   StereoCaptureBuffer* captureBuffer() pure return { return &_buffer; }
   StutterEngine* stutterEngine() pure return { return &_stutter; }
@@ -553,6 +824,7 @@ public:
   float limiterGainReductionDb() const pure { return _fxRack.limiter.gainReductionDb(); }
   float peakLevelL() const pure { return _peakL; }
   float peakLevelR() const pure { return _peakR; }
+  float effectiveGlobalFilter() const pure @safe { return clampBipolar(globalFilterDial + midiPitchBend); }
 
 private:
   double _sampleRate = 44_100.0;
@@ -571,6 +843,78 @@ private:
   float[NumTVMModuleSlots] _lastSlotTensions = float.nan;
   float _peakL = 0.0f;
   float _peakR = 0.0f;
+
+  enum int MaxUndoHistory = 16;
+  ClientSnapshot[MaxUndoHistory] _undoStack;
+  ClientSnapshot[MaxUndoHistory] _redoStack;
+  int _undoCount = 0;
+  int _redoCount = 0;
+
+  static float clampBipolar(float x) pure @safe {
+    if (isNaN(x)) return 0.0f;
+    if (x < -1.0f) return -1.0f;
+    if (x > 1.0f) return 1.0f;
+    return x;
+  }
+
+  ClientSnapshot captureSnapshot() nothrow @nogc {
+    ClientSnapshot snap;
+    auto ps = params();
+    const int n = (ps.length < 137) ? cast(int) ps.length : 137;
+    for (int i = 0; i < n; ++i) {
+      snap.paramNorms[i] = cast(float) ps[i].getNormalized();
+    }
+    snap.chainOrder = signalChainOrder;
+    snap.globalFilterDial = globalFilterDial;
+    snap.palindrome = palindrome;
+    snap.freezeActive = freezeActive;
+    snap.freezeBeats = freezeBeats;
+    snap.stutterStepMode = stutterStepMode;
+    snap.stutterQuantizeEnabled = stutterQuantizeEnabled;
+    snap.bufferReverseL = bufferReverseL;
+    snap.bufferReverseR = bufferReverseR;
+    snap.bufferMovement = bufferMovement;
+    snap.highpassEnable = highpassEnable;
+    snap.highpassCutoffMin = highpassCutoffMin;
+    snap.highpassCutoffMax = highpassCutoffMax;
+    snap.distortTwoBand = distortTwoBand;
+    snap.distortDcOffset = distortDcOffset;
+    snap.wetGainEnable = wetGainEnable;
+    snap.wetGainDb = wetGainDb;
+    snap.dryGainEnable = dryGainEnable;
+    snap.dryGainDb = dryGainDb;
+    snap.activeGestureBankIdx = activeGestureBankIdx;
+    return snap;
+  }
+
+  void restoreSnapshot(const ref ClientSnapshot snap) nothrow @nogc {
+    auto ps = params();
+    const int n = (ps.length < 137) ? cast(int) ps.length : 137;
+    for (int i = 0; i < n; ++i) {
+      ps[i].setFromHost(snap.paramNorms[i]);
+    }
+    signalChainOrder = snap.chainOrder;
+    globalFilterDial = snap.globalFilterDial;
+    palindrome = snap.palindrome;
+    freezeActive = snap.freezeActive;
+    freezeBeats = snap.freezeBeats;
+    stutterStepMode = cast(StutterStepMode) snap.stutterStepMode;
+    stutterQuantizeEnabled = snap.stutterQuantizeEnabled;
+    bufferReverseL = snap.bufferReverseL;
+    bufferReverseR = snap.bufferReverseR;
+    bufferMovement = cast(BufferMovementMode) snap.bufferMovement;
+    highpassEnable = snap.highpassEnable;
+    highpassCutoffMin = snap.highpassCutoffMin;
+    highpassCutoffMax = snap.highpassCutoffMax;
+    distortTwoBand = snap.distortTwoBand;
+    distortDcOffset = snap.distortDcOffset;
+    wetGainEnable = snap.wetGainEnable;
+    wetGainDb = snap.wetGainDb;
+    dryGainEnable = snap.dryGainEnable;
+    dryGainDb = snap.dryGainDb;
+    activeGestureBankIdx = snap.activeGestureBankIdx;
+    _gesture.currentGestureIndex = snap.activeGestureBankIdx;
+  }
 
   void syncSlotCurve(TVMModuleSlot slot, Params curveParam, Params tensionParam) {
     const int idx = cast(int) slot;

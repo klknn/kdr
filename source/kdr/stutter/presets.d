@@ -358,6 +358,98 @@ void applyFactoryPreset(Parameter[] params, int presetIndex) {
   setFloat(params, Params.delayFeedbackMax, cfg.delayFeedbackMax);
 }
 
+// =============================================================================
+// BT Stutter Edit 2 — 24-Note Playable Gesture Bank (C2 .. B3, MIDI 36 .. 59)
+// =============================================================================
+
+enum int NUM_BT_GESTURES = 24;
+
+struct BTGestureEntry {
+  string name;
+  string midiLabel;
+  int factoryPresetIdx;
+  float gestureBeats;       // Gesture length in beats (1, 2, 4, 8)
+  int quantizeGrid;         // QuantizeGrid index
+  int releaseMode;          // ReleaseMode index
+  bool palindrome;
+  bool freezeDefault;
+  float stutterStepBeats;   // Step subdivision in beats
+  int stutterStepMode;      // StutterStepMode
+  bool highpassEnable;
+  float highpassCutoff;
+  bool distortTwoBand;
+  float distortDcOffset;
+  float wetGain;            // [0..2] linear
+  float dryGain;            // [0..2] linear
+}
+
+static immutable BTGestureEntry[NUM_BT_GESTURES] btGestureBank = [
+  BTGestureEntry("C2  BT Classic 1/16",    "C2",  0,  4.0f, 0, 0, false, false, 0.25f,  1, false,  120.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("C#2 Tape Brake 1/4",     "C#2", 1,  4.0f, 2, 2, false, false, 0.25f,  2, false,  220.0f, true,  0.05f, 1.0f, 0.0f),
+  BTGestureEntry("D2  Subway Gate Sweep",  "D2",  2,  4.0f, 1, 0, true,  false, 0.125f, 1, false,  450.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("D#2 8-Bit Arcade Step",  "D#2", 6,  2.0f, 1, 0, false, false, 0.125f, 3, false,  300.0f, false, 0.35f, 1.0f, 0.1f),
+  BTGestureEntry("E2  Comb Riser",         "E2",  4,  4.0f, 2, 2, false, false, 0.25f,  2, true,   320.0f, true,  0.15f, 1.0f, 0.0f),
+  BTGestureEntry("F2  Rev Pendulum Chop",  "F2",  5,  4.0f, 1, 0, true,  false, 0.25f,  4, false,  180.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("F#2 Acid 303 Filter",    "F#2", 2,  4.0f, 1, 0, false, false, 0.125f, 1, true,   400.0f, true,  0.4f,  1.0f, 0.0f),
+  BTGestureEntry("G2  Lo-Fi Glitch Wash",  "G2",  3,  8.0f, 2, 2, true,  false, 0.25f,  5, true,   500.0f, false, 0.2f,  1.0f, 0.2f),
+  BTGestureEntry("G#2 Jet Flanger Vortex", "G#2", 7,  4.0f, 1, 0, false, false, 0.333f, 1, false,  200.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("A2  Wide Pan Chopper",   "A2",  8,  2.0f, 0, 0, true,  false, 0.125f, 1, false,  250.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("A#2 Freeze Reverb Tail", "A#2", 9,  4.0f, 2, 2, false, true,  0.25f,  1, true,   600.0f, true,  0.0f,  1.0f, 0.15f),
+  BTGestureEntry("B2  Triplet Pitch Dive", "B2",  10, 4.0f, 2, 0, false, false, 0.333f, 2, false,  150.0f, true,  0.1f,  1.0f, 0.0f),
+  BTGestureEntry("C3  Chaos Multi-FX",     "C3",  11, 4.0f, 0, 0, true,  false, 0.125f, 5, true,   380.0f, true, -0.3f,  1.0f, 0.1f),
+  BTGestureEntry("C#3 Micro Burst 1/64",   "C#3", 0,  1.0f, 0, 0, false, false, 0.0625f,1, true,   800.0f, false, 0.5f,  1.0f, 0.0f),
+  BTGestureEntry("D3  Vinyl Plunge Stop",  "D3",  1,  2.0f, 1, 2, false, false, 0.5f,   0, false,  120.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("D#3 Auto Stutter Walk",  "D#3", 8,  4.0f, 1, 1, false, false, 0.25f,  2, true,   420.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("E3  Resonant Comb Hum",  "E3",  4,  2.0f, 0, 0, true,  false, 0.125f, 1, false,  200.0f, true,  0.25f, 1.0f, 0.15f),
+  BTGestureEntry("F3  Cyber Bit Crusher",  "F3",  6,  4.0f, 1, 0, false, false, 0.25f,  3, true,   700.0f, false, 0.6f,  1.0f, 0.0f),
+  BTGestureEntry("F#3 Stereo Mirror Flip", "F#3", 5,  4.0f, 1, 0, true,  false, 0.25f,  1, false,  160.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("G3  Shimmer Delay Wash", "G3",  9,  8.0f, 2, 2, true,  false, 0.5f,   2, true,   900.0f, true,  0.0f,  1.0f, 0.25f),
+  BTGestureEntry("G#3 Phaser Swarm",       "G#3", 7,  4.0f, 1, 0, false, false, 0.25f,  4, false,  220.0f, true,  0.1f,  1.0f, 0.0f),
+  BTGestureEntry("A3  Half-Time Stepper",  "A3",  10, 4.0f, 2, 0, false, false, 0.5f,   2, false,  140.0f, true,  0.0f,  1.0f, 0.0f),
+  BTGestureEntry("A#3 Dub Echo Scatter",   "A#3", 3,  4.0f, 1, 2, false, false, 0.25f,  5, true,   520.0f, true, -0.2f,  1.0f, 0.2f),
+  BTGestureEntry("B3  Global Freeze Lock", "B3",  11, 2.0f, 0, 1, false, true,  0.125f, 1, true,   650.0f, true,  0.2f,  1.0f, 0.0f),
+];
+
+/// Returns formatted display string for a BT gesture slot `[0..23]`.
+@nogc nothrow pure @safe
+string getBTGestureName(int gestureIndex) {
+  int idx = gestureIndex;
+  if (idx < 0) idx = 0;
+  if (idx >= NUM_BT_GESTURES) idx = idx % NUM_BT_GESTURES;
+  return btGestureBank[idx].name;
+}
+
+/// Applies the base parameters for a BT gesture bank slot [0..23].
+@nogc nothrow
+void applyBTGesturePreset(Parameter[] params, int gestureIndex) {
+  int idx = gestureIndex;
+  if (idx < 0) idx = 0;
+  if (idx >= NUM_BT_GESTURES) idx = idx % NUM_BT_GESTURES;
+  applyFactoryPreset(params, btGestureBank[idx].factoryPresetIdx);
+
+  if (params.length < 137) return;
+  const ref g = btGestureBank[idx];
+  if (auto pLen = cast(IntegerParameter) params[Params.gestureLength]) {
+    int lenEnum = GestureLength.len1_1;
+    if (g.gestureBeats <= 1.1f) lenEnum = GestureLength.len1_4;
+    else if (g.gestureBeats <= 2.1f) lenEnum = GestureLength.len1_2;
+    else if (g.gestureBeats >= 7.5f) lenEnum = GestureLength.len2_1;
+    const int minV = pLen.minValue();
+    const int maxV = pLen.maxValue();
+    if (maxV > minV) pLen.setFromHost(cast(double)(lenEnum - minV) / cast(double)(maxV - minV));
+  }
+  if (auto pGrid = cast(IntegerParameter) params[Params.quantizeGrid]) {
+    const int minV = pGrid.minValue();
+    const int maxV = pGrid.maxValue();
+    if (maxV > minV) pGrid.setFromHost(cast(double)(g.quantizeGrid - minV) / cast(double)(maxV - minV));
+  }
+  if (auto pRel = cast(IntegerParameter) params[Params.releaseMode]) {
+    const int minV = pRel.minValue();
+    const int maxV = pRel.maxValue();
+    if (maxV > minV) pRel.setFromHost(cast(double)(g.releaseMode - minV) / cast(double)(maxV - minV));
+  }
+}
+
 unittest {
   import kdr.params : buildParams, typedParam;
   Parameter[] ps = buildParams!Params();
@@ -372,5 +464,11 @@ unittest {
     assert(typedParam!(Params.filterEnable)(ps).value == cfg.filterEnable);
     assert(typedParam!(Params.lofiEnable)(ps).value == cfg.lofiEnable);
     assert(typedParam!(Params.reverbEnable)(ps).value == cfg.reverbEnable);
+  }
+
+  // Verify all 24 BT gestures apply cleanly
+  for (int g = 0; g < NUM_BT_GESTURES; ++g) {
+    applyBTGesturePreset(ps, g);
+    assert(getBTGestureName(g).length > 0);
   }
 }

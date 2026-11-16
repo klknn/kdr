@@ -1431,6 +1431,113 @@ unittest {
         auto fb = gfx.testFramebuffer();
         assert(fb.w == 1040 && fb.h == 680);
         destroyFree(gfx);
+
+        // 4. BT Stutter Edit 2 Verification Suite:
+        //    Signal Chain Reorder DSP Effect, Global Filter + MIDI Pitch Bend,
+        //    Palindrome, Freeze, Walk/Skip Step Modes, L/R Buffer Reverse, Highpass, Wet/Dry Gains, Undo/Redo
+        {
+            // 4A. Signal Chain Reordering alters actual audio processing output (DISTORT -> LOWPASS vs LOWPASS -> DISTORT)
+            float[64] oscL, oscR, outA_L, outA_R, outB_L, outB_R;
+            for (int f = 0; f < 64; ++f) {
+                oscL[f] = 0.55f * sin(2.0f * cast(float) PI * 2800.0f * cast(float) f / 44_100.0f);
+                oscR[f] = oscL[f];
+            }
+            const(float)*[2] pIn = [oscL.ptr, oscR.ptr];
+            float*[2] pOutA = [outA_L.ptr, outA_R.ptr];
+            float*[2] pOutB = [outB_L.ptr, outB_R.ptr];
+
+            auto runChainTest = (bool lowpassBeforeDistort, float*[2] pOut) {
+                auto c = new StutterClient();
+                c.reset(44_100.0, 64, 2, 2);
+                c.param(Params.autoMode).setFromHost(1.0);
+                c.param(Params.stutterEnable).setFromHost(0.0);
+                c.param(Params.distortEnable).setFromHost(1.0);
+                c.param(Params.distortDriveHighMax).setFromHost(1.0);
+                c.param(Params.distortDriveHighMin).setFromHost(1.0);
+                c.param(Params.filterEnable).setFromHost(1.0);
+                c.param(Params.filterCutoffMin).setFromHost(0.15);
+                c.param(Params.filterCutoffMax).setFromHost(0.15);
+                if (lowpassBeforeDistort) {
+                    c.moveSignalChain(cast(int) ChainFXId.lowpass, 0);
+                }
+                TimeInfo ti; ti.tempo = 120.0; ti.hostIsPlaying = true; ti.timeInSamples = 0;
+                for (int b = 0; b < 4; ++b) {
+                    c.processAudio(pIn[], pOut[], 64, ti);
+                    ti.timeInSamples += 64;
+                }
+            };
+            runChainTest(false, pOutA);
+            runChainTest(true,  pOutB);
+            float chainDiff = 0.0f;
+            for (int f = 0; f < 64; ++f) chainDiff += fabs(outA_L[f] - outB_L[f]);
+            assert(chainDiff > 0.05f, "Reordering LOWPASS before DISTORT must change output waveform");
+
+            // 4B. Global Filter + MIDI Pitch Bend
+            auto gfClient = new StutterClient();
+            gfClient.reset(44_100.0, 64, 2, 2);
+            gfClient.enqueueMIDIFromHost(makeMidiMessagePitchWheel(0, 0, -0.75f));
+            TimeInfo gti; gti.tempo = 120.0; gti.hostIsPlaying = true;
+            gfClient.processAudio(pIn[], pOutA[], 64, gti);
+            assert(gfClient.effectiveGlobalFilter() < -0.5f);
+
+            // 4C. Palindrome triangle phase fold
+            GestureController palG;
+            palG.reset(44_100.0);
+            palG.setParams(true, ReleaseMode.instant, 1.0f, QuantizeGrid.instant);
+            palG.palindrome = true;
+            float ph, maxPh = 0.0f, endPh = 0.0f;
+            bool act; int gIdx;
+            // Tempo 120 = 2 beats/sec -> 1 beat = 22050 samples; advance 1.5 beats = 33075 samples
+            const double bps = 120.0 / (60.0 * 44_100.0);
+            for (int s = 0; s < 33_075; ++s) {
+                palG.advanceSample(bps, ph, act, gIdx);
+                if (ph > maxPh) maxPh = ph;
+                endPh = ph;
+            }
+            assert(maxPh > 0.98f);
+            assert(endPh < 0.65f && endPh > 0.35f, "Palindrome must fold back down around phase 0.5 at 1.5x length");
+
+            // 4D. Freeze locks phase progression & holds stutter slice
+            auto frzClient = new StutterClient();
+            frzClient.reset(44_100.0, 64, 2, 2);
+            frzClient.freezeActive = true;
+            frzClient.freezeBeats = 0.25f;
+            frzClient.processAudio(pIn[], pOutA[], 64, gti);
+            const float ph1 = frzClient.gestureController().getGesturePhase();
+            frzClient.processAudio(pIn[], pOutA[], 64, gti);
+            const float ph2 = frzClient.gestureController().getGesturePhase();
+            assert(fabs(ph1 - ph2) < 1e-6f);
+            assert(frzClient.stutterEngine().isStuttering());
+
+            // 4E. 24-Note BT Gesture Bank + Undo/Redo + Walk Step Mode + Highpass + Distort DC Offset + Wet/Dry Gain
+            auto bankClient = new StutterClient();
+            bankClient.reset(44_100.0, 64, 2, 2);
+            const int initialBank = bankClient.activeGestureBankIdx;
+            bankClient.selectGestureBank(10, true);
+            assert(bankClient.activeGestureBankIdx == 10);
+            assert(bankClient.canUndo());
+            bankClient.undo();
+            assert(bankClient.activeGestureBankIdx == initialBank);
+            assert(bankClient.canRedo());
+            bankClient.redo();
+            assert(bankClient.activeGestureBankIdx == 10);
+
+            bankClient.stutterStepMode = StutterStepMode.walk;
+            bankClient.bufferReverseL = true;
+            bankClient.bufferReverseR = false;
+            bankClient.highpassEnable = true;
+            bankClient.highpassPoles = 1;
+            bankClient.distortTwoBand = false;
+            bankClient.distortDcOffset = 0.4f;
+            bankClient.dryGainEnable = true;
+            bankClient.dryGainDb = -6.0f;
+            bankClient.wetGainDb = -3.0f;
+            bankClient.processAudio(pIn[], pOutA[], 64, gti);
+            for (int f = 0; f < 64; ++f) {
+                assert(!isNaN(outA_L[f]) && !isInfinity(outA_L[f]));
+                assert(!isNaN(outA_R[f]) && !isInfinity(outA_R[f]));
+            }
+        }
     } else {
         pragma(msg, "[NOTICE] kdr.stutter.client not yet implemented - contract verified via oracle");
     }

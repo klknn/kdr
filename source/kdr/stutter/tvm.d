@@ -750,6 +750,77 @@ struct TVMModulationEngine {
   }
 }
 
+/// Per-parameter TVM curve configuration in BT Stutter Edit 2 (speed, direction, grid, lock).
+struct TVMParamState {
+  TVMCurve curve;
+  float speedMultiplier = 1.0f; // 0.25x, 0.5x, 1.0x, 2.0x, 4.0x
+  bool reversed = false;
+  int gridResolution = 8;       // 2..32 divisions shown on curve editor grid
+  bool lockRange = false;       // Lock start & end handles together
+
+  @nogc nothrow pure @safe:
+
+  void reset(TVMCurvePreset preset = TVMCurvePreset.rampUp) {
+    curve.loadPreset(preset);
+    speedMultiplier = 1.0f;
+    reversed = false;
+    gridResolution = 8;
+    lockRange = false;
+  }
+
+  /// Evaluates curve accounting for speed multiplier (wrapping in [0,1]) and reverse toggle.
+  float evaluateModulated(float gesturePhase) const {
+    float p = (isNaN(gesturePhase) || isInfinity(gesturePhase)) ? 0.0f : gesturePhase;
+    if (p < 0.0f) p = 0.0f;
+    if (p > 1.0f) p = 1.0f;
+    const float spd = (speedMultiplier > 0.05f && speedMultiplier <= 8.0f) ? speedMultiplier : 1.0f;
+    float scaled = p * spd;
+    // Wrap scaled phase within [0, 1] cleanly even at p == 1.0
+    if (spd > 1.001f) {
+      const int whole = cast(int) scaled;
+      scaled = (p >= 1.0f) ? 1.0f : (scaled - cast(float) whole);
+    } else if (scaled > 1.0f) {
+      scaled = 1.0f;
+    }
+    if (reversed) scaled = 1.0f - scaled;
+    return curve.evaluate(scaled);
+  }
+}
+
+enum int MaxTVMParamsPerSlot = 6;
+enum int NumExtendedTVMSlots = 16; // 0..13 match TVMModuleSlot, 14 = Highpass, 15 = Output
+
+/// Fixed-size @nogc per-parameter TVM curve bank for BT Stutter Edit 2 modules.
+struct ExtendedTVMBank {
+  TVMParamState[MaxTVMParamsPerSlot][NumExtendedTVMSlots] states;
+
+  @nogc nothrow pure @safe:
+
+  void resetAll() {
+    foreach (s; 0 .. NumExtendedTVMSlots) {
+      foreach (p; 0 .. MaxTVMParamsPerSlot) {
+        states[s][p].reset(TVMCurvePreset.rampUp);
+      }
+    }
+  }
+
+  ref inout(TVMParamState) getParamState(int slotIdx, int paramIdx) inout return {
+    int s = slotIdx;
+    if (s < 0) s = 0;
+    if (s >= NumExtendedTVMSlots) s = NumExtendedTVMSlots - 1;
+    int p = paramIdx;
+    if (p < 0) p = 0;
+    if (p >= MaxTVMParamsPerSlot) p = MaxTVMParamsPerSlot - 1;
+    return states[s][p];
+  }
+
+  float evaluateParam(int slotIdx, int paramIdx, float gesturePhase) const {
+    int s = (slotIdx < 0) ? 0 : ((slotIdx >= NumExtendedTVMSlots) ? NumExtendedTVMSlots - 1 : slotIdx);
+    int p = (paramIdx < 0) ? 0 : ((paramIdx >= MaxTVMParamsPerSlot) ? MaxTVMParamsPerSlot - 1 : paramIdx);
+    return states[s][p].evaluateModulated(gesturePhase);
+  }
+}
+
 // =============================================================================
 // Comprehensive Unit Tests
 // =============================================================================

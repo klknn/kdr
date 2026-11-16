@@ -11,6 +11,7 @@ public import kdr.stutter.fx.gate;
 public import kdr.stutter.fx.pan;
 public import kdr.stutter.fx.tapestop;
 public import kdr.stutter.fx.filter;
+public import kdr.stutter.fx.highpass;
 public import kdr.stutter.fx.lofi;
 public import kdr.stutter.fx.distort;
 public import kdr.stutter.fx.comb;
@@ -21,12 +22,45 @@ public import kdr.stutter.fx.reverb;
 public import kdr.stutter.fx.delay;
 public import kdr.stutter.fx.limiter;
 
-/// Unified container holding all 11 Stutter Edit 2 FX modules + Delay + Master Limiter.
+/// Identifiers for the 11 reorderable modules in Stutter Edit 2's Signal Chain.
+enum ChainFXId : int {
+  distort  = 0,
+  lofi     = 1,
+  chorus   = 2,
+  comb     = 3,
+  reverb   = 4,
+  flanger  = 5,
+  phaser   = 6,
+  lowpass  = 7,
+  tapestop = 8,
+  highpass = 9,
+  delay    = 10,
+}
+
+enum int NumChainFX = 11;
+
+static immutable ChainFXId[NumChainFX] defaultSignalChainOrder = [
+  ChainFXId.distort,
+  ChainFXId.lofi,
+  ChainFXId.chorus,
+  ChainFXId.comb,
+  ChainFXId.reverb,
+  ChainFXId.flanger,
+  ChainFXId.phaser,
+  ChainFXId.lowpass,
+  ChainFXId.tapestop,
+  ChainFXId.highpass,
+  ChainFXId.delay,
+];
+
+/// Unified container holding all Stutter Edit 2 FX modules + Global Filter + Master Limiter.
 struct StutterFXRack {
   GateFX gate;
   PanFX pan;
   TapeStopFX tapeStop;
   FilterFX filter;
+  HighpassFX highpass;
+  FilterFX globalFilter;
   LoFiFX lofi;
   DistortFX distort;
   CombFX comb;
@@ -44,6 +78,8 @@ struct StutterFXRack {
     pan.reset(sampleRate);
     tapeStop.reset(sampleRate);
     filter.reset(sampleRate);
+    highpass.reset(sampleRate);
+    globalFilter.reset(sampleRate);
     lofi.reset(sampleRate);
     distort.reset(sampleRate);
     comb.reset(sampleRate);
@@ -67,4 +103,6 @@ unittest {
   rack.setTempo(128.0);
   assert(rack.gate.sampleRate == 48_000.0);
   assert(rack.delay.tempo == 128.0);
+  assert(rack.highpass.sampleRate == 48_000.0);
+  assert(defaultSignalChainOrder.length == NumChainFX);
 }
